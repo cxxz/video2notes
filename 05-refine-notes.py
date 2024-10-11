@@ -139,7 +139,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Process and refine a transcript using an LLM.")
     parser.add_argument("-i", "--input", required=True, help="Path to the input Markdown file")
     parser.add_argument("-o", "--output", required=False, default=".", help="Folder to save the output Markdown file")
-    parser.add_argument("-m", "--model", required=False, default="gpt-4o-mini", help="LLM model to use for refinement")
+    parser.add_argument("-m", "--model", required=False, default="anthropic.claude-3-5-sonnet-20240620-v1:0", help="LLM model to use for refinement")
     parser.add_argument("--max_chars", type=int, default=None, help="Maximum number of characters to process")
     return parser.parse_args()
 

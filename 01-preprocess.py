@@ -131,6 +131,7 @@ def parse_arguments():
     parser.add_argument('-t', '--timestamp', type=float, default=60, help='Initial timestamp in seconds (default: 60).')
     parser.add_argument('-o', '--output', type=str, default=".", help='Path to save the ROI data as JSON.')
     parser.add_argument('-s', '--silent', action='store_true', help='Skip ROI selection and set slide ROI to entire frame.')
+    parser.add_argument('-a', '--audio', action='store_true', help='Extract audio from the video.')
     return parser.parse_args()
 
 def main():
@@ -162,7 +163,8 @@ def main():
         print(f"{k}: {v}")
 
     # Extract audio from the video
-    extract_audio_from_video(args.video_path, audio_output)
+    if args.audio:
+        extract_audio_from_video(args.video_path, audio_output)
 
 if __name__ == "__main__":
     main()
