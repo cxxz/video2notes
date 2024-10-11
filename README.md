@@ -6,6 +6,8 @@ This project is designed to convert videos of lectures or presentations to Markd
 
 ## Workflow
 
+0. **Split Video into Clips**
+
 1. **Preprocess Video ([`01-preprocess.py`](01-preprocess.py))**
     - **Description**: Select Regions of Interest (ROIs) from a video at a specific timestamp and extract audio.
     - **Usage**:
