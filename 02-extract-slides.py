@@ -48,6 +48,8 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
     slides_buffer = []
     group_id = 0
 
+    slides_folder = os.path.basename(os.path.normpath(save_folder))
+
     while frame_number < end_frame:
         ret, frame = cap.read()
         if not ret:
@@ -73,26 +75,35 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
 
         # Compare with the last slide hash
         if last_slide_hash is None or abs(current_hash - last_slide_hash) > similarity_threshold:
+            # ocr_text = pytesseract.image_to_string(unmasked_frame)
+            # len_ocr_text = len(ocr_text)
+            # if len_ocr_text < 10:
+            #     # Categorize as non-slide if OCR text is too short
+            #     frame_number += frame_interval
+            #     cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+            #     continue
+
             # End of a group; save the middle slide
             if group_started and slides_buffer:
                 timestamps = first_timestamp_of_group
                 slide_index = int(len(slides_buffer) / 2)
                 selected_slide = slides_buffer[slide_index]
-                slide_path = os.path.join(save_folder, f'slide_{group_id}.png')
-                cv2.imwrite(slide_path, selected_slide)
-
-                # Perform OCR on the selected slide
+                
                 ocr_text = pytesseract.image_to_string(selected_slide)
+                len_ocr_text = len(ocr_text)
+                if len_ocr_text > 10:
+                    slide_filepath = os.path.join(save_folder, f'slide_{group_id}.png')
+                    image_path = os.path.join(slides_folder, f'slide_{group_id}.png')
+                    cv2.imwrite(slide_filepath, selected_slide)
+                    h, m, s = seconds_to_hms(first_timestamp_of_group)
+                    print(f'slide_{group_id}.png starts at: {h:02d}:{m:02d}:{s:02d} with {len_ocr_text} characters')
 
-                h, m, s = seconds_to_hms(first_timestamp_of_group)
-                print(f'slide_{group_id}.png starts at: {h:02d}:{m:02d}:{s:02d} with {len(ocr_text)} characters')
-
-                unique_slides.append({
-                    'group_id': group_id,
-                    'timestamp': first_timestamp_of_group,
-                    'image_path': slide_path,
-                    'ocr_text': ocr_text
-                })
+                    unique_slides.append({
+                        'group_id': group_id,
+                        'timestamp': first_timestamp_of_group,
+                        'image_path': image_path,
+                        'ocr_text': ocr_text
+                    })
 
                 slides_buffer = []
                 group_id += 1
@@ -121,21 +132,23 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
         timestamps = first_timestamp_of_group
         slide_index = int(len(slides_buffer) / 2)
         selected_slide = slides_buffer[slide_index]
-        slide_path = os.path.join(save_folder, f'slide_{group_id}.png')
-        cv2.imwrite(slide_path, selected_slide)
 
         # Perform OCR on the selected slide
         ocr_text = pytesseract.image_to_string(selected_slide)
+        len_ocr_text = len(ocr_text)
+        if len_ocr_text >= 10:
+            slide_filepath = os.path.join(save_folder, f'slide_{group_id}.png')
+            image_path = os.path.join(slides_folder, f'slide_{group_id}.png')
+            cv2.imwrite(slide_filepath, selected_slide)
+            h, m, s = seconds_to_hms(first_timestamp_of_group)
+            print(f'slide_{group_id}.png starts at: {h:02d}:{m:02d}:{s:02d} with {len_ocr_text} characters')
 
-        h, m, s = seconds_to_hms(first_timestamp_of_group)
-        print(f'slide_{group_id}.png starts at: {h:02d}:{m:02d}:{s:02d} with {len(ocr_text)} characters')
-
-        unique_slides.append({
-            'group_id': group_id,
-            'timestamp': first_timestamp_of_group,
-            'image_path': slide_path,
-            'ocr_text': ocr_text
-        })
+            unique_slides.append({
+                'group_id': group_id,
+                'timestamp': first_timestamp_of_group,
+                'image_path': image_path,
+                'ocr_text': ocr_text
+            })
 
     cap.release()
     return unique_slides
@@ -174,8 +187,7 @@ def main():
 
     # Set up the output folder
     if args.output_folder:
-        save_root_folder = args.output_folder
-        save_folder = os.path.join(save_root_folder, f'slides_{video_basename}_{timestamp}')
+        save_folder = os.path.join(args.output_folder)
     else:
         save_folder = os.path.join(os.path.dirname(args.video_path), f'slides_{video_basename}_{timestamp}')
 

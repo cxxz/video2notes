@@ -6,7 +6,7 @@ This project is designed to convert videos of lectures or presentations to Markd
 
 ## Workflow
 
-0. **Split Video into Clips**
+0. **Split Video into Clips (Optional)**
 
 1. **Preprocess Video ([`01-preprocess.py`](01-preprocess.py))**
     - **Description**: Select Regions of Interest (ROIs) from a video at a specific timestamp and extract audio.
@@ -65,6 +65,16 @@ This project is designed to convert videos of lectures or presentations to Markd
       - `-o, --output`: Folder to save the output Markdown file.
       - `-m, --model`: LLM model to use for refinement.
 
+
+## Run the Entire Workflow 
+**Using ([`run_workflow.py`](run_workflow.py))**
+  - **Description**: Orchestrates all steps (optional video splitting, preprocessing, slide extraction, transcription, note generation, and refinement) in one script.
+  - **Usage**:
+    ```sh
+    python run_workflow.py
+    ```
+  - **Arguments**: Prompt-based interaction for file paths and optional steps.
+
 ## Environment Variables
 
 - [`OPENAI_BASE_URL`]("Go to definition"): Base URL for OpenAI API.
@@ -76,3 +86,5 @@ This project is designed to convert videos of lectures or presentations to Markd
    ```sh
    git clone <repository_url>
    cd <repository_directory>
+   ```
+

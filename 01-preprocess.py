@@ -2,7 +2,7 @@ import cv2
 import argparse
 import json
 import os
-from moviepy.editor import VideoFileClip
+from moviepy import VideoFileClip
 
 def select_roi_at_timestamp(video_path, timestamp=60, silent=False):
     def get_frame_at_timestamp(cap, timestamp):

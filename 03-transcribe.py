@@ -5,6 +5,7 @@ import os
 from dotenv import load_dotenv
 import argparse
 import re
+import torch
 
 # Load environment variables
 load_dotenv()
@@ -12,8 +13,17 @@ load_dotenv()
 HF_TOKEN = os.environ.get('HF_TOKEN')
 
 # Constants
-WHISPERX_DEVICE = "cuda"
-WHISPERX_BATCH_SIZE = 32
+if torch.cuda.is_available():
+    logging.info("CUDA device found. Using GPU.")
+    WHISPERX_DEVICE = "cuda"
+    WHISPERX_BATCH_SIZE = 32
+    WHISPERX_DTYPE = "float16"
+else:
+    logging.warning("CUDA device not found. Using CPU instead.")
+    WHISPERX_DEVICE = "cpu"
+    WHISPERX_BATCH_SIZE = 8
+    WHISPERX_DTYPE = "int8"
+    
 WHISPERX_ARGS = {"max_line_width": None, "max_line_count": None, "highlight_words": False}
 SUPPORTED_FORMATS = {"srt", "vtt", "json"}
 
@@ -26,7 +36,7 @@ def load_whisper_model(model_id, device):
     else:
         logging.info(f"Loading local model from {model_id}")
 
-    return whisperx.load_model(model_id, device)
+    return whisperx.load_model(model_id, device, compute_type=WHISPERX_DTYPE)
 
 def save_transcription(result, save_dir, filename, output_format, whisperx_args):
     """Helper function to write transcription to a file."""
@@ -87,7 +97,7 @@ def parse_arguments():
     parser.add_argument("-i", "--audio_path", required=True, help="Path to the input audio file")
     parser.add_argument("-o", "--output", default=".", help="Output directory to save transcriptions")
     parser.add_argument("-f", "--format", choices=["srt", "vtt", "json"], default="json", help="Output format (srt, vtt, json)")
-    parser.add_argument("-m", "--model_id", default="/local/openai/faster-whisper-large-v3", help="Whisper model ID or local path")
+    parser.add_argument("-m", "--model_id", default="large-v3", help="Whisper model ID or local path")
     
     return parser.parse_args()
 
