@@ -1,12 +1,13 @@
-# Conver Presentation Video to Multimodal Notes
+# Convert Presentation Videos into Slide-Integrated Notes
 
 ## Overview
 
-This project is designed to convert videos of lectures or presentations to Markdown notes with screenshots. The workflow is divided into several stages, each handled by a separate Python script.
+The goal of this project is to transform videos of lectures or presentations into structured, text-based notes with integrated screenshots. Each step is handled by one of the listed Python scripts, allowing you to split the video (optionally), preprocess it, extract slides, transcribe audio, and generate/refine the final Markdown notes.
 
 ## Workflow
 
 0. **Split Video into Clips (Optional)**
+   - Uses `00-split-video.py` to slice your video into smaller parts.
 
 1. **Preprocess Video ([`01-preprocess.py`](01-preprocess.py))**
     - **Description**: Select Regions of Interest (ROIs) from a video at a specific timestamp and extract audio.
@@ -77,8 +78,8 @@ This project is designed to convert videos of lectures or presentations to Markd
 
 ## Environment Variables
 
-- [`OPENAI_BASE_URL`]("Go to definition"): Base URL for OpenAI API.
-- [`HF_TOKEN`]("Go to definition"): Hugging Face token for Whisper model.
+- `OPENAI_BASE_URL`: Base URL for your OpenAI API (when using Azure or custom endpoints).
+- `HF_TOKEN`: Your Hugging Face token necessary for Whisper and diarization models.
 
 ## Installation
 
