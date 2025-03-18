@@ -7,7 +7,7 @@ load_dotenv()
 
 def initialize_client(model_id):
     """Initializes the appropriate OpenAI client based on the model."""
-    if "anthropic.claude" in model_id:
+    if "claude" in model_id.lower():
         client = AnthropicBedrock(
             aws_region="us-west-2",
         )
@@ -28,7 +28,9 @@ def initialize_client(model_id):
 def get_llm_response(client, model_id, prompt):
     """Gets LLM response using the client and returns the result."""
     try:
-        if "anthropic.claude" in model_id:
+        if "claude" in model_id.lower():
+            if model_id.startswith("bedrock/"):
+                model_id = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
             completion = client.messages.create(
                 model=model_id,
                 messages=[
