@@ -7,16 +7,16 @@ from flask import Flask, render_template_string, request, send_from_directory
 
 def run_slide_selector(folder_path):
     """Run the slide selector web app for the given folder"""
-    # Expand user path if needed
-    folder = os.path.expanduser(folder_path)
+    if folder_path.endswith("/"):
+        folder_path = folder_path[:-1]
     
     # Load the slides.json file from the folder
-    json_path = os.path.join(folder, "slides.json")
+    json_path = os.path.join(folder_path, "slides.json")
     with open(json_path, "r", encoding="utf-8") as f:
         slides = json.load(f)
         
     # Get the folder's basename (e.g. "slides_vfmos-20250115_20250315180347")
-    folder_basename = os.path.basename(folder)
+    folder_basename = os.path.basename(folder_path)
     
     # Adjust each slide's image path
     for slide in slides:
@@ -120,5 +120,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate a slide selection webpage.")
     parser.add_argument("folder", help="Folder containing slides.json and images")
     args = parser.parse_args()
-    folder = os.path.expanduser(args.folder)
+    # Modified folder assignment:
+    if os.path.isabs(args.folder):
+        folder = args.folder
+    else:
+        folder = os.path.expanduser(args.folder)
+    print(f"CONG TEST: {folder}")
     run_slide_selector(folder)
