@@ -155,7 +155,8 @@ def main():
         ["python", "02-extract-slides.py", 
          "-i", video_path,
          "-j", rois_path,
-         "-o", slides_dir],
+         "-o", slides_dir,
+         "--select"],
         "Extracting slides"
     ):
         return

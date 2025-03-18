@@ -1,4 +1,4 @@
-from moviepy import VideoFileClip
+from moviepy.editor import VideoFileClip
 import sys
 import os
 
@@ -39,13 +39,15 @@ def main(video_file, timestamp_file):
     for i in range(len(times) - 1):
         start_time = times[i]
         end_time = times[i + 1]
-        subclip = clip.subclipped(start_time, end_time)  # Changed from subclip to subclipped
+        subclip = clip.subclip(start_time, end_time)
         video_path = os.path.splitext(video_file)[0]
+        # print(video_path) 
         output_path = f'{video_path}_seg_{i + 1}'
         output_video = f'{output_path}.mp4'
         output_audio = f'{output_path}.mp3'
+        # output_filename = f'output_segment_{i + 1}.mp4'
         subclip.write_videofile(output_video, codec='libx264', temp_audiofile=output_audio, remove_temp=False)
-        
+
 if __name__ == '__main__':
     if len(sys.argv) != 3:
         print("Usage: python split_video.py <video_file> <timestamp_file>")

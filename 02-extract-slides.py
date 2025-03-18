@@ -7,8 +7,14 @@ import numpy as np
 import argparse
 import json
 import pytesseract
+import sys
+
+# Import slide selection functionality
+from slides_selector import run_slide_selector
 
 def crop_slide(frame, roi):
+    if roi is None:
+        return frame
     """Crop the slide area from the frame using the defined ROI."""
     x, y, w, h = roi
     return frame[y:y+h, x:x+w]
@@ -156,31 +162,33 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
 def main():
     parser = argparse.ArgumentParser(description="Extract unique slides from a video.")
     parser.add_argument('-i', '--video_path', required=True, help='Path to the video file')
-    parser.add_argument('-j', '--roi_json', required=True, help='Path to the ROI JSON file')
+    parser.add_argument('-j', '--roi_json', required=False, help='Path to the ROI JSON file')
     parser.add_argument('-o', '--output_folder', default=None, help='Output folder to save slides')
     parser.add_argument('-s', '--start_seconds', type=int, default=1, help='Start time in seconds')
     parser.add_argument('-e', '--end_seconds', type=int, default=None, help='End time in seconds')
     parser.add_argument('-f', '--frame_rate', type=int, default=1, help='Extract one frame every N seconds')
     parser.add_argument('-t', '--similarity_threshold', type=int, default=15, help='Threshold for perceptual hash difference')
+    parser.add_argument('--select', action='store_true', help='Launch slide selector web app after extraction')
     args = parser.parse_args()
 
     # Read ROIs from the JSON file
-    with open(args.roi_json, 'r') as f:
-        roi_data = json.load(f)
+    slide_roi = None
+    masks_roi = None
 
-    # Extract the ROIs
-    rois = roi_data.get('rois', {})
-    slide_roi = rois.get('slide', None)
-    if slide_roi is None:
-        print("Error: 'slide' ROI must be specified in the ROI JSON file.")
-        return
+    if args.roi_json:
+        with open(args.roi_json, 'r') as f:
+            roi_data = json.load(f)
 
-    # Collect masks ROI if they exist
-    masks_roi = []
-    for key in ['speaker', 'subtitle']:
-        roi = rois.get(key)
-        if roi:
-            masks_roi.append(roi)
+        # Extract the ROIs
+        rois = roi_data.get('rois', {})
+        slide_roi = rois.get('slide', None)
+
+        # Collect masks ROI if they exist
+        masks_roi = []
+        for key in ['speaker', 'subtitle']:
+            roi = rois.get(key, None)
+            if roi:
+                masks_roi.append(roi)
 
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     video_basename = os.path.splitext(os.path.basename(args.video_path))[0]
@@ -211,6 +219,11 @@ def main():
     with open(json_file, 'w') as f:
         json.dump(unique_slides, f, indent=4)
     print(f'Saved slides to {json_file}')
+    
+    # Launch the slide selector web app if requested
+    if args.select:
+        print("\nLaunching slide selector web app...")
+        run_slide_selector(save_folder)
 
 if __name__ == '__main__':
     main()
