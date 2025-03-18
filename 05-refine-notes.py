@@ -19,7 +19,7 @@ def initialize_client(llm):
         client = AzureOpenAI(
             api_version="2024-02-15-preview"
         )
-    elif llm.startswith("anthropic.claude"):
+    elif "anthropic.claude" in llm:
         client = AnthropicBedrock(
             aws_region="us-west-2",
         )
@@ -30,7 +30,7 @@ def initialize_client(llm):
 def get_llm_response(client, llm, prompt):
     """Gets LLM response using the client and returns the result."""
     try:
-        if llm.startswith("anthropic.claude"):
+        if "anthropic.claude" in llm:
             completion = client.messages.create(
                 model=llm,
                 messages=[
@@ -139,7 +139,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Process and refine a transcript using an LLM.")
     parser.add_argument("-i", "--input", required=True, help="Path to the input Markdown file")
     parser.add_argument("-o", "--output", required=False, default=".", help="Folder to save the output Markdown file")
-    parser.add_argument("-m", "--model", required=False, default="anthropic.claude-3-5-sonnet-20241022-v2:0", help="LLM model to use for refinement")
+    parser.add_argument("-m", "--model", required=False, default="us.anthropic.claude-3-7-sonnet-20250219-v1:0", help="LLM model to use for refinement")
     parser.add_argument("--max_chars", type=int, default=None, help="Maximum number of characters to process")
     return parser.parse_args()
 
