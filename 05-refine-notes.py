@@ -44,7 +44,7 @@ Your task is to refine the text.
  - Do NOT change the meaning of the text.
  - Do NOT change the Markdown formatting such as bold, italic, or code blocks.
  - Do NOT remove any image from the text.
-Only output the refined text. Do not include any other information.
+Please output only the refined text in your response, without any additional information, such as leading XML tags or triple quotes.
 
 Here's the refined text:
 """
