@@ -7,7 +7,7 @@ import shutil
 from utils import initialize_client, get_llm_response
 from flask import Flask, render_template_string, request, send_from_directory, url_for
 
-def extract_vocabulary(ocr_text, model_id='azure/gpt-4o'):
+def extract_vocabulary(ocr_text, model_id='openai/gpt-4o-2024-05-13'):
     """
     Extract domain-specific vocabulary terms from the OCR transcript.
     """
@@ -237,7 +237,7 @@ def run_slide_selector(folder_path):
           <form action="/extract-vocabulary" method="post">
             <input type="hidden" name="ocr_text_file" value="{output_txt}">
             <select name="model_id" class="select-model">
-              <option value="azure/gpt-4o">azure/gpt-4o</option>
+              <option value="openai/gpt-4o-2024-05-13">openai/gpt-4o</option>
               <option value="bedrock/claude-3.7">bedrock/claude-3.7</option>
             </select>
             <button type="submit" class="btn">Extract Vocabulary</button>
@@ -274,7 +274,8 @@ def run_slide_selector(folder_path):
     @app.route("/extract-vocabulary", methods=["POST"])
     def extract_vocabulary_route():
         ocr_text_file = request.form.get("ocr_text_file")
-        model_id = request.form.get("model_id", "azure/gpt-4o")
+        model_id = request.form.get("model_id", "openai/gpt-4o")
+
         try:
             with open(ocr_text_file, "r", encoding="utf-8") as f:
                 ocr_text = f.read()
