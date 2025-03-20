@@ -9,7 +9,7 @@ load_dotenv()
 import scrubadub
 import scrubadub_spacy
 
-def analyze_text_for_names(text: str, threshold: float = 0.75) -> Tuple[bool, Dict, List[str]]:
+def analyze_text_for_names(text: str, threshold: float = 0.65) -> Tuple[bool, Dict, str]:
     """
     Analyzes text to determine if it consists mostly of names.
     
@@ -23,11 +23,13 @@ def analyze_text_for_names(text: str, threshold: float = 0.75) -> Tuple[bool, Di
         - Dictionary with detected entities and their counts
         - Cleaned text with placeholders
     """
-    # Initialize scrubber
+    # Initialize scrubber with SpacyNameDetector
     scrubber = scrubadub.Scrubber()
+    
     
     # Clean the text and get the filth
     cleaned_text = scrubber.clean(text)
+    # TOFIX: use alternative approach to remove all nonsense words, symptoms, and tags
     # print(f"Cleaned text: {cleaned_text}")
 
     scrubber.add_detector(scrubadub_spacy.detectors.SpacyNameDetector(model='en_core_web_lg'))
@@ -37,7 +39,7 @@ def analyze_text_for_names(text: str, threshold: float = 0.75) -> Tuple[bool, Di
     entity_counts = {}
     name_chars = 0
     
-    non_whitespace_chars = sum(1 for char in text if not char.isspace())
+    non_whitespace_chars = sum(1 for char in cleaned_text if not char.isspace() and char not in [',', '.', '<', '>', '\n'])
 
     names = []
 
@@ -64,6 +66,7 @@ def analyze_text_for_names(text: str, threshold: float = 0.75) -> Tuple[bool, Di
     is_mostly_names = name_proportion >= threshold
     
     return is_mostly_names, entity_counts, names
+
 
 def initialize_client(llm):
     """Initializes the appropriate OpenAI client based on the model."""

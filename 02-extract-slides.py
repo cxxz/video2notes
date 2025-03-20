@@ -207,7 +207,7 @@ def main():
     parser.add_argument('-s', '--start_seconds', type=int, default=1, help='Start time in seconds')
     parser.add_argument('-e', '--end_seconds', type=int, default=None, help='End time in seconds')
     parser.add_argument('-f', '--frame_rate', type=int, default=1, help='Extract one frame every N seconds')
-    parser.add_argument('-t', '--similarity_threshold', type=int, default=15, help='Threshold for perceptual hash difference')
+    parser.add_argument('-t', '--similarity_threshold', type=int, default=13, help='Threshold for perceptual hash difference')
     parser.add_argument('--select', action='store_true', help='Launch slide selector web app after extraction')
     args = parser.parse_args()
 
