@@ -1,9 +1,69 @@
 import os
+from typing import Dict, Tuple, List
 from openai import AzureOpenAI, OpenAI
 from anthropic import AnthropicBedrock
 from dotenv import load_dotenv
 
 load_dotenv()
+
+import scrubadub
+import scrubadub_spacy
+
+def analyze_text_for_names(text: str, threshold: float = 0.75) -> Tuple[bool, Dict, List[str]]:
+    """
+    Analyzes text to determine if it consists mostly of names.
+    
+    Args:
+        text: The input text to analyze
+        threshold: The proportion of text that needs to be names to return True (default: 0.7)
+        
+    Returns:
+        Tuple containing:
+        - Boolean indicating if text is mostly names
+        - Dictionary with detected entities and their counts
+        - Cleaned text with placeholders
+    """
+    # Initialize scrubber
+    scrubber = scrubadub.Scrubber()
+    
+    # Clean the text and get the filth
+    cleaned_text = scrubber.clean(text)
+    # print(f"Cleaned text: {cleaned_text}")
+
+    scrubber.add_detector(scrubadub_spacy.detectors.SpacyNameDetector(model='en_core_web_lg'))
+    filth_list = list(scrubber.iter_filth(text))
+    
+    # Count the different types of entities
+    entity_counts = {}
+    name_chars = 0
+    
+    non_whitespace_chars = sum(1 for char in text if not char.isspace())
+
+    names = []
+
+    for filth in filth_list:
+        if filth.type not in entity_counts:
+            entity_counts[filth.type] = 0
+        entity_counts[filth.type] += 1
+        
+        # Count characters that are names
+        if filth.type == 'name':
+            name_chars += len(filth.text)
+            names.append(filth.text)
+
+        if filth.type == 'organization':
+            non_whitespace_chars -= len(filth.text)
+    
+    # Calculate the proportion of text that is names
+    # Remove whitespace for a more accurate calculation
+    
+    name_proportion = name_chars / non_whitespace_chars if non_whitespace_chars > 0 else 0
+    # print(f"Name proportion: {name_proportion:.2f}")
+    
+    # Determine if text is mostly names
+    is_mostly_names = name_proportion >= threshold
+    
+    return is_mostly_names, entity_counts, names
 
 def initialize_client(llm):
     """Initializes the appropriate OpenAI client based on the model."""

@@ -10,6 +10,7 @@ import pytesseract
 import sys
 
 # Import slide selection functionality
+from utils import analyze_text_for_names
 from slides_selector import run_slide_selector
 
 def crop_slide(frame, roi):
@@ -52,6 +53,8 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
     group_started = False
     first_timestamp_of_group = None
     slides_buffer = []
+    speaker_names = []
+    names_text = ""
     group_id = 0
 
     slides_folder = os.path.basename(os.path.normpath(save_folder))
@@ -78,6 +81,7 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
 
         # Calculate perceptual hash
         current_hash = imagehash.phash(pil_image)
+        # print(f"CONG TES current_hash: {current_hash}")
 
         # Compare with the last slide hash
         if last_slide_hash is None or abs(current_hash - last_slide_hash) > similarity_threshold:
@@ -90,14 +94,37 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
             #     continue
 
             # End of a group; save the middle slide
-            if group_started and slides_buffer:
-                timestamps = first_timestamp_of_group
-                slide_index = int(len(slides_buffer) / 2)
+            if group_started and slides_buffer:     
+                add_new_slide = True
+
+                slide_index = int(len(slides_buffer) / 2)       
                 selected_slide = slides_buffer[slide_index]
-                
+
                 ocr_text = pytesseract.image_to_string(selected_slide)
                 len_ocr_text = len(ocr_text)
-                if len_ocr_text > 10:
+                if len_ocr_text < 10:
+                    add_new_slide = False
+                elif len(unique_slides) > 0:
+                    for slide in unique_slides:
+                        prev_group = slide['group_id']
+                        prev_imagehash = slide['imagehash']
+                        if abs(current_hash - prev_imagehash) <= similarity_threshold:
+                            print(f"Duplicate slide found: {prev_group} with current group {group_id}")
+                            add_new_slide = False
+                            break
+                    
+                    if add_new_slide and len_ocr_text <= 300:
+                        # Check if the slide contains mostly names
+                        is_mostly_names, _, names = analyze_text_for_names(ocr_text)
+                        if is_mostly_names:
+                            print(f"Slide {group_id} contains mostly names: {names} in ocr_text: {ocr_text}")
+                            if len(names) > len(speaker_names):
+                                speaker_names = names
+                                names_text = ocr_text
+                            add_new_slide = False
+                            
+                if add_new_slide:
+                    timestamps = first_timestamp_of_group
                     slide_filepath = os.path.join(save_folder, f'slide_{group_id}.png')
                     image_path = os.path.join(slides_folder, f'slide_{group_id}.png')
                     cv2.imwrite(slide_filepath, selected_slide)
@@ -108,7 +135,8 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
                         'group_id': group_id,
                         'timestamp': first_timestamp_of_group,
                         'image_path': image_path,
-                        'ocr_text': ocr_text
+                        'ocr_text': ocr_text,
+                        'imagehash': current_hash
                     })
 
                 slides_buffer = []
@@ -153,10 +181,22 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
                 'group_id': group_id,
                 'timestamp': first_timestamp_of_group,
                 'image_path': image_path,
-                'ocr_text': ocr_text
+                'ocr_text': ocr_text,
+                'imagehash': current_hash
             })
 
     cap.release()
+    # Convert all imagehash objects in unique_slides to strings
+    for slide in unique_slides:
+        slide['imagehash'] = str(slide['imagehash'])
+
+    if len(speaker_names) > 0:
+        print(f"Speaker names detected: {speaker_names}")
+        # save speaker names to a txt named speaker_names.txt
+        speaker_names_file = os.path.join(save_folder, 'speaker_names.txt')
+        with open(speaker_names_file, 'w') as f:
+            f.write(names_text)
+
     return unique_slides
 
 def main():
