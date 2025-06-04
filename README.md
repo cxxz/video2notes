@@ -147,7 +147,7 @@ This project transforms videos of lectures or presentations into structured, tex
 
 ## Environment Variables
 
-- **`OPENAI_BASE_URL`**: Base URL for OpenAI API (for Azure or custom endpoints)
+- **`V2N_BASE_URL`**: Base URL for custom OpenAI-compatible custom endpoint
 - **`HF_TOKEN`**: Hugging Face token for Whisper and diarization models
 - **Additional API keys**: Configure in `.env` file for various LLM providers
 
