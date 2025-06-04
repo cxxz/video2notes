@@ -11,12 +11,6 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-# Check if Flask is installed
-if ! python3 -c "import flask" &> /dev/null; then
-    echo "📦 Installing Flask requirements..."
-    pip3 install -r requirements_web.txt
-fi
-
 ## if templates folder does not exist, create it
 if [ ! -d "templates" ]; then
     echo "❌ Template folder not found"
