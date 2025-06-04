@@ -65,7 +65,6 @@ def get_server_host():
     
     return host
 
-SERVER_HOST = get_server_host()
 MAIN_APP_PORT = os.getenv('MAIN_APP_PORT', 5001)
 SLIDE_SELECTOR_PORT = os.getenv('SLIDE_SELECTOR_PORT', 5002)
 SPEAKER_LABELER_PORT = os.getenv('SPEAKER_LABELER_PORT', 5006)
@@ -611,7 +610,7 @@ def open_slides():
     if workflow_state['interactive_stage'] != 'slides' or not workflow_state['interactive_ready']:
         return jsonify({'error': 'Slide selector not ready'}), 400
     
-    return redirect(f'http://{SERVER_HOST}:{SLIDE_SELECTOR_PORT}')
+    return redirect(f'http://{get_server_host()}:{SLIDE_SELECTOR_PORT}')
 
 @app.route('/open_speakers')
 def open_speakers():
@@ -619,7 +618,7 @@ def open_speakers():
     if workflow_state['interactive_stage'] != 'speakers' or not workflow_state['interactive_ready']:
         return jsonify({'error': 'Speaker labeler not ready'}), 400
     
-    return redirect(f'http://{SERVER_HOST}:{SPEAKER_LABELER_PORT}')
+    return redirect(f'http://{get_server_host()}:{SPEAKER_LABELER_PORT}')
 
 @app.route('/status')
 def status():
@@ -732,6 +731,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
     logging.info("🚀 Starting Video2Notes Web Application")
+    logging.info(f"📝 Access the application at: http://0.0.0.0:{MAIN_APP_PORT}")
     logging.info(f"🔧 Make sure ports {SLIDE_SELECTOR_PORT} (slide selector) and {SPEAKER_LABELER_PORT} (speaker labeler) are available")
     
 
