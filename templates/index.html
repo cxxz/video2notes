@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video2Notes - Web Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .form-container {
+            padding: 40px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 1.1em;
+        }
+
+        .form-group input[type="text"], 
+        .form-group input[type="number"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input[type="text"]:focus,
+        .form-group input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            accent-color: #667eea;
+        }
+
+        .checkbox-group label {
+            margin-bottom: 0;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .section {
+            border: 2px solid #f0f2f5;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+            background: #fafbfc;
+        }
+
+        .section h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .help-text {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
+        .submit-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            width: 100%;
+            font-weight: 600;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .required {
+            color: #e74c3c;
+        }
+
+        .conditional {
+            margin-left: 20px;
+            padding-left: 15px;
+            border-left: 3px solid #e1e5e9;
+            margin-top: 10px;
+        }
+
+        .info-box {
+            background: #e8f4fd;
+            border: 1px solid #bee5eb;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .info-box h4 {
+            color: #0c5460;
+            margin-bottom: 10px;
+        }
+
+        .info-box p {
+            color: #0c5460;
+            margin: 5px 0;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+            }
+            
+            .form-container {
+                padding: 20px;
+            }
+            
+            .header {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+
+        /* Upload functionality styles */
+        .input-method-toggle {
+            display: flex;
+            gap: 15px;
+            margin-top: 8px;
+        }
+
+        .input-method-toggle input[type="radio"] {
+            display: none;
+        }
+
+        .toggle-label {
+            padding: 10px 20px;
+            border: 2px solid #e1e5e9;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+            font-weight: 500;
+        }
+
+        .input-method-toggle input[type="radio"]:checked + .toggle-label {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+
+        .input-section {
+            margin-top: 15px;
+        }
+
+        .file-upload-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .file-input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+        }
+
+        .file-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .upload-btn {
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .upload-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .upload-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .upload-progress {
+            margin: 15px 0;
+        }
+
+        .upload-status {
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-weight: 500;
+        }
+
+        .upload-status.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .upload-status.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+
+        .upload-status.info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+
+        /* File browser styles */
+        .browse-btn {
+            padding: 8px 15px;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s ease;
+            margin-left: 10px;
+            font-size: 0.9em;
+        }
+
+        .browse-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 3px 10px rgba(40, 167, 69, 0.3);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            font-size: 1.4em;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background 0.2s ease;
+        }
+
+        .close-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .modal-body {
+            padding: 0;
+        }
+
+        .path-navigation {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            font-family: monospace;
+            font-size: 0.9em;
+            color: #495057;
+            word-break: break-all;
+        }
+
+        .file-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            border-bottom: 1px solid #f0f2f5;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .file-item:hover {
+            background: #f8f9fa;
+        }
+
+        .file-item.selectable:hover {
+            background: #e3f2fd;
+        }
+
+        .file-item.selected {
+            background: #2196f3;
+            color: white;
+        }
+
+        .file-icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 12px;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .file-info {
+            flex: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .file-name {
+            font-weight: 500;
+            margin-right: 15px;
+        }
+
+        .file-details {
+            font-size: 0.85em;
+            color: #666;
+            display: flex;
+            gap: 15px;
+        }
+
+        .file-item.selected .file-details {
+            color: rgba(255,255,255,0.8);
+        }
+
+        .modal-footer {
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .selected-path {
+            font-family: monospace;
+            font-size: 0.9em;
+            color: #495057;
+            margin-right: 20px;
+            word-break: break-all;
+            flex: 1;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-secondary {
+            padding: 8px 16px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .btn-primary:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            padding: 15px 20px;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            text-align: center;
+        }
+
+        .path-input-container {
+            display: flex;
+            align-items: center;
+            gap: 0;
+        }
+
+        .path-input-container input {
+            border-radius: 8px 0 0 8px;
+            border-right: none;
+        }
+
+        .path-input-container .browse-btn {
+            border-radius: 0 8px 8px 0;
+            margin-left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎥 Video2Notes</h1>
+            <p>Transform presentation videos into structured notes with slides and speaker identification</p>
+        </div>
+
+        <div class="form-container">
+            <div class="info-box">
+                <h4>📋 Workflow Overview</h4>
+                <p>1. Video preprocessing and ROI selection</p>
+                <p>2. Slide extraction and interactive selection</p>
+                <p>3. Audio transcription with vocabulary enhancement</p>
+                <p>4. Note generation and speaker labeling</p>
+                <p>5. Optional note refinement with AI</p>
+            </div>
+
+            <form action="/start_workflow" method="post" id="workflowForm">
+                <!-- Required Video Input -->
+                <div class="section">
+                    <h3>📹 Video Input</h3>
+                    
+                    <!-- Input method selection -->
+                    <div class="form-group">
+                        <label>Input Method</label>
+                        <div class="input-method-toggle">
+                            <input type="radio" id="method_upload" name="input_method" value="upload" checked>
+                            <label for="method_upload" class="toggle-label">📁 Upload File</label>
+                            
+                            <input type="radio" id="method_path" name="input_method" value="path">
+                            <label for="method_path" class="toggle-label">📝 Enter Path</label>
+                        </div>
+                    </div>
+                    
+                    <!-- File upload section -->
+                    <div id="upload_section" class="input-section">
+                        <div class="form-group">
+                            <label for="video_file">Select Video File</label>
+                            <div class="file-upload-container">
+                                <input type="file" id="video_file" name="video_file" 
+                                       accept=".mp4,.avi,.mov,.mkv,.wmv,.flv,.webm,.m4v,.mpg,.mpeg"
+                                       class="file-input">
+                                <button type="button" id="upload_btn" class="upload-btn" disabled>
+                                    📤 Upload Video
+                                </button>
+                            </div>
+                            <div class="help-text">
+                                Supported formats: MP4, AVI, MOV, MKV, WMV, FLV, WebM, M4V, MPG, MPEG (Max: 2GB)
+                            </div>
+                            
+                            <!-- Upload progress -->
+                            <div id="upload_progress" class="upload-progress" style="display: none;">
+                                <div class="progress-container">
+                                    <div class="progress-bar" id="upload_progress_bar"></div>
+                                </div>
+                                <div class="progress-text" id="upload_progress_text">Uploading...</div>
+                            </div>
+                            
+                            <!-- Upload status -->
+                            <div id="upload_status" class="upload-status" style="display: none;"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Manual path section -->
+                    <div id="path_section" class="input-section" style="display: none;">
+                        <div class="form-group">
+                            <label for="video_path">Video File Path <span class="required">*</span></label>
+                            <div class="path-input-container">
+                                <input type="text" id="video_path" name="video_path" 
+                                       placeholder="/path/to/your/video.mp4">
+                                <button type="button" class="browse-btn">📁 Browse</button>
+                            </div>
+                            <div class="help-text">Full path to your video file on the server</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Hidden field for the actual video path -->
+                    <input type="hidden" id="final_video_path" name="video_path" required>
+                </div>
+
+                <!-- Optional Video Splitting -->
+                <div class="section">
+                    <h3>✂️ Video Splitting (Optional)</h3>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="do_split" name="do_split">
+                        <label for="do_split">Split video into segments</label>
+                    </div>
+                    
+                    <div class="conditional" id="split_options" style="display: none;">
+                        <div class="form-group">
+                            <label for="timestamp_file">Timestamp File Path</label>
+                            <input type="text" id="timestamp_file" name="timestamp_file" 
+                                   placeholder="/path/to/timestamps.txt">
+                            <div class="help-text">File containing timestamps for video splitting</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preprocessing Options -->
+                <div class="section">
+                    <h3>⚙️ Preprocessing Options</h3>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="extract_audio" name="extract_audio" checked>
+                        <label for="extract_audio">Extract audio from video</label>
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="skip_roi" name="skip_roi" checked>
+                        <label for="skip_roi">Skip ROI selection (use entire frame as slide area)</label>
+                    </div>
+                    
+                    <div class="conditional" id="roi_options" style="display: none;">
+                        <div class="form-group">
+                            <label for="roi_timestamp">Initial Timestamp for ROI Selection (seconds)</label>
+                            <input type="number" id="roi_timestamp" name="roi_timestamp" 
+                                   placeholder="60" step="0.1">
+                            <div class="help-text">Timestamp to display for ROI selection interface</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Processing Options -->
+                <div class="section">
+                    <h3>🔧 Processing Options</h3>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="do_label_speakers" name="do_label_speakers" checked>
+                        <label for="do_label_speakers">Label speakers in transcript</label>
+                    </div>
+                    <div class="help-text">Interactive web interface to assign names to speakers</div>
+                    
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="do_refine_notes" name="do_refine_notes">
+                        <label for="do_refine_notes">Refine notes with AI</label>
+                    </div>
+                    <div class="help-text">Use Large Language Models to improve note structure and clarity</div>
+                </div>
+
+                <button type="submit" class="submit-btn">
+                    🚀 Start Video2Notes Workflow
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Select Video File</h3>
+                <button class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="path-navigation">Current Path: <span id="current_path">/</span></div>
+                <div class="file-list">
+                    <!-- File list will be dynamically populated by JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="selected-path">Selected Path: <span id="selected_path"></span></div>
+                <div class="modal-actions">
+                    <button class="btn-secondary">Cancel</button>
+                    <button class="btn-primary">Select</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Show/hide conditional fields
+        document.getElementById('do_split').addEventListener('change', function() {
+            const splitOptions = document.getElementById('split_options');
+            splitOptions.style.display = this.checked ? 'block' : 'none';
+        });
+
+        document.getElementById('skip_roi').addEventListener('change', function() {
+            const roiOptions = document.getElementById('roi_options');
+            roiOptions.style.display = this.checked ? 'none' : 'block';
+        });
+
+        // Form validation
+        document.getElementById('workflowForm').addEventListener('submit', function(e) {
+            const finalVideoPath = document.getElementById('final_video_path').value.trim();
+            const doSplit = document.getElementById('do_split').checked;
+            const timestampFile = document.getElementById('timestamp_file').value.trim();
+
+            if (!finalVideoPath) {
+                alert('Please select a video file or enter a video file path');
+                e.preventDefault();
+                return;
+            }
+
+            if (doSplit && !timestampFile) {
+                alert('Please enter a timestamp file path for video splitting');
+                e.preventDefault();
+                return;
+            }
+        });
+
+        // Input method switching
+        document.querySelectorAll('input[name="input_method"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const uploadSection = document.getElementById('upload_section');
+                const pathSection = document.getElementById('path_section');
+                
+                if (this.value === 'upload') {
+                    uploadSection.style.display = 'block';
+                    pathSection.style.display = 'none';
+                    document.getElementById('video_path').removeAttribute('required');
+                } else {
+                    uploadSection.style.display = 'none';
+                    pathSection.style.display = 'block';
+                    document.getElementById('video_path').setAttribute('required', 'required');
+                }
+                
+                // Clear the final video path when switching methods
+                document.getElementById('final_video_path').value = '';
+                clearUploadStatus();
+            });
+        });
+
+        // File selection handler
+        document.getElementById('video_file').addEventListener('change', function() {
+            const uploadBtn = document.getElementById('upload_btn');
+            uploadBtn.disabled = !this.files.length;
+            
+            if (this.files.length > 0) {
+                const file = this.files[0];
+                const maxSize = 2 * 1024 * 1024 * 1024; // 2GB
+                
+                if (file.size > maxSize) {
+                    showUploadStatus('File size exceeds 2GB limit', 'error');
+                    this.value = '';
+                    uploadBtn.disabled = true;
+                    return;
+                }
+                
+                showUploadStatus(`Selected: ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`, 'info');
+            }
+        });
+
+        // Manual path input handler
+        document.getElementById('video_path').addEventListener('input', function() {
+            document.getElementById('final_video_path').value = this.value;
+        });
+
+        // Upload button handler
+        document.getElementById('upload_btn').addEventListener('click', function() {
+            const fileInput = document.getElementById('video_file');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file first');
+                return;
+            }
+            
+            uploadFile(file);
+        });
+
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('video_file', file);
+            
+            const progressContainer = document.getElementById('upload_progress');
+            const progressBar = document.getElementById('upload_progress_bar');
+            const progressText = document.getElementById('upload_progress_text');
+            const uploadBtn = document.getElementById('upload_btn');
+            
+            // Show progress
+            progressContainer.style.display = 'block';
+            uploadBtn.disabled = true;
+            progressBar.style.width = '0%';
+            progressText.textContent = 'Uploading...';
+            
+            const xhr = new XMLHttpRequest();
+            
+            // Upload progress
+            xhr.upload.addEventListener('progress', function(e) {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 100;
+                    progressBar.style.width = percentComplete + '%';
+                    progressText.textContent = `Uploading... ${Math.round(percentComplete)}%`;
+                }
+            });
+            
+            // Upload complete
+            xhr.addEventListener('load', function() {
+                progressContainer.style.display = 'none';
+                uploadBtn.disabled = false;
+                
+                if (xhr.status === 200) {
+                    const response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        document.getElementById('final_video_path').value = response.file_path;
+                        showUploadStatus(
+                            `✅ Upload successful: ${response.original_name} (${response.size_mb} MB)`, 
+                            'success'
+                        );
+                    } else {
+                        showUploadStatus(`Upload failed: ${response.error}`, 'error');
+                    }
+                } else {
+                    const response = JSON.parse(xhr.responseText);
+                    showUploadStatus(`Upload failed: ${response.error || 'Unknown error'}`, 'error');
+                }
+            });
+            
+            // Upload error
+            xhr.addEventListener('error', function() {
+                progressContainer.style.display = 'none';
+                uploadBtn.disabled = false;
+                showUploadStatus('Upload failed: Network error', 'error');
+            });
+            
+            xhr.open('POST', '/upload_video');
+            xhr.send(formData);
+        }
+
+        function showUploadStatus(message, type) {
+            const statusDiv = document.getElementById('upload_status');
+            statusDiv.textContent = message;
+            statusDiv.className = `upload-status ${type}`;
+            statusDiv.style.display = 'block';
+        }
+
+        function clearUploadStatus() {
+            const statusDiv = document.getElementById('upload_status');
+            statusDiv.style.display = 'none';
+            const progressContainer = document.getElementById('upload_progress');
+            progressContainer.style.display = 'none';
+        }
+
+        // Auto-populate example paths (you can modify these)
+        window.addEventListener('load', function() {
+            // You can set default paths here if needed
+            // document.getElementById('video_path').value = '/home/user/videos/lecture.mp4';
+        });
+
+        // File browser functionality
+        let currentBrowsePath = '';
+        let selectedFilePath = '';
+
+        document.querySelector('.browse-btn').addEventListener('click', function() {
+            showFileBrowser();
+        });
+
+        function showFileBrowser() {
+            const modal = document.querySelector('.modal');
+            modal.style.display = 'block';
+            
+            // Get initial path and load directory
+            fetch('/get_initial_browse_path')
+                .then(response => response.json())
+                .then(data => {
+                    currentBrowsePath = data.path;
+                    loadDirectory(currentBrowsePath);
+                })
+                .catch(error => {
+                    console.error('Error getting initial path:', error);
+                    showError('Failed to initialize file browser');
+                });
+        }
+
+        function loadDirectory(path) {
+            const fileList = document.querySelector('.file-list');
+            fileList.innerHTML = '<div class="loading-spinner"></div>Loading...';
+            
+            document.getElementById('current_path').textContent = path;
+            
+            fetch(`/browse_files?path=${encodeURIComponent(path)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        showError(data.error);
+                        return;
+                    }
+                    
+                    currentBrowsePath = data.current_path;
+                    renderFileList(data.items);
+                })
+                .catch(error => {
+                    console.error('Error loading directory:', error);
+                    showError('Failed to load directory');
+                });
+        }
+
+        function renderFileList(items) {
+            const fileList = document.querySelector('.file-list');
+            fileList.innerHTML = '';
+            
+            if (items.length === 0) {
+                fileList.innerHTML = '<div class="error-message">Directory is empty</div>';
+                return;
+            }
+            
+            items.forEach(item => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                
+                if (item.type === 'file' && item.is_video) {
+                    fileItem.classList.add('selectable');
+                }
+                
+                let icon = '📁';
+                if (item.type === 'file') {
+                    icon = item.is_video ? '🎬' : '📄';
+                }
+                if (item.is_parent) {
+                    icon = '⬆️';
+                }
+                
+                let details = '';
+                if (item.type === 'file') {
+                    details = `
+                        <div class="file-details">
+                            <span>${item.size_str}</span>
+                            <span>${item.modified}</span>
+                        </div>
+                    `;
+                }
+                
+                fileItem.innerHTML = `
+                    <div class="file-icon">${icon}</div>
+                    <div class="file-info">
+                        <div class="file-name">${item.name}</div>
+                        ${details}
+                    </div>
+                `;
+                
+                fileItem.addEventListener('click', function() {
+                    if (item.type === 'directory') {
+                        loadDirectory(item.path);
+                    } else if (item.is_video) {
+                        // Select video file
+                        document.querySelectorAll('.file-item').forEach(el => el.classList.remove('selected'));
+                        fileItem.classList.add('selected');
+                        selectedFilePath = item.path;
+                        document.getElementById('selected_path').textContent = selectedFilePath;
+                        document.querySelector('.btn-primary').disabled = false;
+                    }
+                });
+                
+                fileList.appendChild(fileItem);
+            });
+        }
+
+        function showError(message) {
+            const fileList = document.querySelector('.file-list');
+            fileList.innerHTML = `<div class="error-message">${message}</div>`;
+        }
+
+        // Close modal
+        document.querySelector('.close-btn').addEventListener('click', function() {
+            closeFileBrowser();
+        });
+
+        document.querySelector('.btn-secondary').addEventListener('click', function() {
+            closeFileBrowser();
+        });
+
+        function closeFileBrowser() {
+            document.querySelector('.modal').style.display = 'none';
+            selectedFilePath = '';
+            document.getElementById('selected_path').textContent = '';
+            document.querySelector('.btn-primary').disabled = true;
+        }
+
+        // Select file
+        document.querySelector('.btn-primary').addEventListener('click', function() {
+            if (selectedFilePath) {
+                document.getElementById('video_path').value = selectedFilePath;
+                document.getElementById('final_video_path').value = selectedFilePath;
+                closeFileBrowser();
+            }
+        });
+
+        // Close modal when clicking outside
+        window.addEventListener('click', function(event) {
+            const modal = document.querySelector('.modal');
+            if (event.target === modal) {
+                closeFileBrowser();
+            }
+        });
+    </script>
+</body>
+</html> 

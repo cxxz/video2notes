@@ -118,7 +118,7 @@ def load_transcript(transcript_path):
 def update_transcript():
     """
     Replace each speaker header in the transcript with the user-provided speaker name.
-    For example, **SPEAKER_09 [00:02.692]:** becomes **Speaker - Alice [00:02.692]:** when labeled as "Alice"
+    For example, **SPEAKER_09 [00:02.692]:** becomes **SPEAKER - Alice [00:02.692]:** when labeled as "Alice"
     or stays **SPEAKER_09 [00:02.692]:** when no custom label is provided.
     """
     global transcript_content, speaker_mapping
@@ -130,9 +130,9 @@ def update_transcript():
         rest = match.group(2)
         label = speaker_mapping.get(spk, spk)
         
-        # If the label is different from the original speaker ID, format as "Speaker - Name"
+        # If the label is different from the original speaker ID, format as "SPEAKER - Name"
         if label != spk:
-            formatted_label = f"Speaker - {label}"
+            formatted_label = f"SPEAKER - {label}"
         else:
             # Keep original format if no custom name was provided
             formatted_label = label

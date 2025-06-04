@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video2Notes - Workflow Progress</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .status-section {
+            margin-bottom: 30px;
+        }
+
+        .status-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-left: 5px solid #667eea;
+        }
+
+        .status-title {
+            font-size: 1.4em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .progress-container {
+            background: #e9ecef;
+            border-radius: 25px;
+            height: 20px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .progress-bar {
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            height: 100%;
+            border-radius: 25px;
+            transition: width 0.5s ease;
+            position: relative;
+            min-width: 0%;
+        }
+
+        .progress-text {
+            text-align: center;
+            font-weight: 600;
+            color: #333;
+            margin-top: 5px;
+        }
+
+        .current-step {
+            font-size: 1.2em;
+            color: #667eea;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .interactive-section {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .interactive-section h3 {
+            color: #856404;
+            margin-bottom: 15px;
+        }
+
+        .interactive-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            margin: 10px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .interactive-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .interactive-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .logs-section {
+            margin-top: 30px;
+        }
+
+        .logs-container {
+            background: #1e1e1e;
+            border-radius: 10px;
+            padding: 20px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            color: #fff;
+        }
+
+        .log-entry {
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .log-entry.info {
+            color: #17a2b8;
+        }
+
+        .log-entry.success {
+            color: #28a745;
+        }
+
+        .log-entry.error {
+            color: #dc3545;
+        }
+
+        .log-entry.warning {
+            color: #ffc107;
+        }
+
+        .controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .control-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+
+        .control-btn:hover {
+            background: #c82333;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-idle { background: #6c757d; }
+        .status-running { 
+            background: #28a745; 
+            animation: pulse 1.5s infinite;
+        }
+        .status-completed { background: #007bff; }
+        .status-error { background: #dc3545; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .completion-section {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .completion-section h3 {
+            color: #155724;
+            margin-bottom: 15px;
+        }
+
+        .download-links {
+            margin: 15px 0;
+        }
+
+        .download-btn {
+            background: #28a745;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            margin: 5px;
+            display: inline-block;
+        }
+
+        .download-btn:hover {
+            background: #218838;
+        }
+
+        .error-section {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .error-section h3 {
+            color: #721c24;
+            margin-bottom: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .logs-container {
+                height: 300px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎥 Video2Notes Workflow</h1>
+            <p>Processing your video...</p>
+        </div>
+
+        <div class="content">
+            <!-- Status Section -->
+            <div class="status-section">
+                <div class="status-card">
+                    <div class="status-title">
+                        <span id="status-indicator" class="status-indicator status-idle"></span>
+                        Workflow Status: <span id="status-text">Starting...</span>
+                    </div>
+                    
+                    <div class="current-step" id="current-step">Initializing...</div>
+                    
+                    <div class="progress-container">
+                        <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+                    </div>
+                    <div class="progress-text">
+                        <span id="progress-text">0%</span> Complete
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interactive Section (shown when needed) -->
+            <div class="interactive-section" id="interactive-section" style="display: none;">
+                <h3 id="interactive-title">Interactive Step Required</h3>
+                <p id="interactive-description">Please complete the interactive step to continue.</p>
+                <div id="interactive-buttons">
+                    <a href="/open_slides" target="_blank" class="interactive-btn" id="slides-btn" style="display: none;">
+                        🖼️ Open Slide Selector
+                    </a>
+                    <a href="/open_speakers" target="_blank" class="interactive-btn" id="speakers-btn" style="display: none;">
+                        🎤 Open Speaker Labeler
+                    </a>
+                </div>
+            </div>
+
+            <!-- Completion Section -->
+            <div class="completion-section" id="completion-section" style="display: none;">
+                <h3>🎉 Workflow Completed Successfully!</h3>
+                <p>Your video has been processed and notes have been generated.</p>
+                <div class="download-links" id="download-links">
+                    <!-- Download links will be populated by JavaScript -->
+                </div>
+                <a href="/" class="interactive-btn">🔄 Process Another Video</a>
+            </div>
+
+            <!-- Error Section -->
+            <div class="error-section" id="error-section" style="display: none;">
+                <h3>❌ Workflow Failed</h3>
+                <p>An error occurred during processing. Please check the logs below for details.</p>
+                <a href="/" class="interactive-btn">🔄 Try Again</a>
+            </div>
+
+            <!-- Logs Section -->
+            <div class="logs-section">
+                <h3>📋 Process Logs</h3>
+                <div class="logs-container" id="logs-container">
+                    <div class="log-entry">Waiting for workflow to start...</div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="controls">
+                <button class="control-btn" id="stop-btn" onclick="stopWorkflow()">🛑 Stop Workflow</button>
+                <button class="control-btn" onclick="clearLogs()" style="background: #6c757d;">🗑️ Clear Logs</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let eventSource;
+        let autoScroll = true;
+
+        function initializeEventSource() {
+            console.log('Initializing EventSource connection...');
+            eventSource = new EventSource('/progress_stream');
+            
+            eventSource.onopen = function(event) {
+                console.log('EventSource connection opened', event);
+            };
+            
+            eventSource.onmessage = function(event) {
+                console.log('Received SSE data:', event.data);
+                try {
+                    const data = JSON.parse(event.data);
+                    updateProgress(data);
+                } catch (error) {
+                    console.error('Error parsing SSE data:', error, event.data);
+                }
+            };
+            
+            eventSource.onerror = function(event) {
+                console.error('EventSource error:', event);
+                console.log('EventSource readyState:', eventSource.readyState);
+                
+                if (eventSource.readyState === EventSource.CLOSED) {
+                    console.log('EventSource connection closed, attempting to reconnect...');
+                    setTimeout(initializeEventSource, 5000); // Reconnect after 5 seconds
+                } else if (eventSource.readyState === EventSource.CONNECTING) {
+                    console.log('EventSource is connecting...');
+                }
+            };
+        }
+
+        function updateProgress(data) {
+            // Update status
+            const statusText = document.getElementById('status-text');
+            const statusIndicator = document.getElementById('status-indicator');
+            const currentStep = document.getElementById('current-step');
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            
+            statusText.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+            currentStep.textContent = data.current_step || 'Waiting...';
+            progressBar.style.width = data.progress + '%';
+            progressText.textContent = data.progress + '%';
+            
+            // Update status indicator
+            statusIndicator.className = 'status-indicator status-' + data.status;
+            
+            // Add new log entries
+            if (data.new_logs && data.new_logs.length > 0) {
+                const logsContainer = document.getElementById('logs-container');
+                data.new_logs.forEach(log => {
+                    const logEntry = document.createElement('div');
+                    logEntry.className = 'log-entry';
+                    
+                    // Style based on content
+                    if (log.includes('✅')) {
+                        logEntry.classList.add('success');
+                    } else if (log.includes('❌') || log.includes('💥')) {
+                        logEntry.classList.add('error');
+                    } else if (log.includes('🖱️') || log.includes('🎤')) {
+                        logEntry.classList.add('warning');
+                    } else {
+                        logEntry.classList.add('info');
+                    }
+                    
+                    logEntry.textContent = log;
+                    logsContainer.appendChild(logEntry);
+                });
+                
+                // Auto-scroll to bottom
+                if (autoScroll) {
+                    logsContainer.scrollTop = logsContainer.scrollHeight;
+                }
+            }
+            
+            // Handle interactive stages
+            handleInteractiveStage(data);
+            
+            // Handle completion
+            if (data.status === 'completed') {
+                showCompletionSection();
+                if (eventSource) {
+                    eventSource.close();
+                }
+            } else if (data.status === 'error') {
+                showErrorSection();
+                if (eventSource) {
+                    eventSource.close();
+                }
+            }
+        }
+
+        function handleInteractiveStage(data) {
+            const interactiveSection = document.getElementById('interactive-section');
+            const interactiveTitle = document.getElementById('interactive-title');
+            const interactiveDescription = document.getElementById('interactive-description');
+            const slidesBtn = document.getElementById('slides-btn');
+            const speakersBtn = document.getElementById('speakers-btn');
+            
+            if (data.interactive_stage && data.interactive_ready) {
+                interactiveSection.style.display = 'block';
+                
+                if (data.interactive_stage === 'slides') {
+                    interactiveTitle.textContent = '🖼️ Slide Selection Required';
+                    interactiveDescription.textContent = 'Please select the relevant slides to continue with the workflow.';
+                    slidesBtn.style.display = 'inline-block';
+                    speakersBtn.style.display = 'none';
+                } else if (data.interactive_stage === 'speakers') {
+                    interactiveTitle.textContent = '🎤 Speaker Labeling Required';
+                    interactiveDescription.textContent = 'Please label the speakers in your transcript.';
+                    slidesBtn.style.display = 'none';
+                    speakersBtn.style.display = 'inline-block';
+                }
+            } else {
+                interactiveSection.style.display = 'none';
+                slidesBtn.style.display = 'none';
+                speakersBtn.style.display = 'none';
+            }
+        }
+
+        function showCompletionSection() {
+            const completionSection = document.getElementById('completion-section');
+            const downloadLinks = document.getElementById('download-links');
+            
+            completionSection.style.display = 'block';
+            
+            // Add download links (you can customize these based on your needs)
+            downloadLinks.innerHTML = `
+                <a href="/download/notes.md" class="download-btn">📄 Download Notes</a>
+                <a href="/download/transcript.json" class="download-btn">📝 Download Transcript</a>
+                <a href="/download/slides.zip" class="download-btn">🖼️ Download Slides</a>
+            `;
+        }
+
+        function showErrorSection() {
+            document.getElementById('error-section').style.display = 'block';
+        }
+
+        function stopWorkflow() {
+            if (confirm('Are you sure you want to stop the workflow?')) {
+                fetch('/stop_workflow', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const logsContainer = document.getElementById('logs-container');
+                            const logEntry = document.createElement('div');
+                            logEntry.className = 'log-entry warning';
+                            logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] 🛑 Workflow stopped by user';
+                            logsContainer.appendChild(logEntry);
+                            logsContainer.scrollTop = logsContainer.scrollHeight;
+                        }
+                    })
+                    .catch(error => console.error('Error stopping workflow:', error));
+            }
+        }
+
+        function clearLogs() {
+            const logsContainer = document.getElementById('logs-container');
+            logsContainer.innerHTML = '<div class="log-entry">Logs cleared...</div>';
+        }
+
+        // Toggle auto-scroll
+        document.getElementById('logs-container').addEventListener('scroll', function() {
+            const container = this;
+            autoScroll = (container.scrollTop + container.clientHeight >= container.scrollHeight - 10);
+        });
+
+        // Initialize when page loads
+        window.addEventListener('load', function() {
+            initializeEventSource();
+        });
+
+        // Clean up when page unloads
+        window.addEventListener('beforeunload', function() {
+            if (eventSource) {
+                eventSource.close();
+            }
+        });
+    </script>
+</body>
+</html> 
