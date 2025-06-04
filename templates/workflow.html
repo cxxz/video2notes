@@ -4,351 +4,277 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video2Notes - Workflow Progress</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/hpe-design.css') }}">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-
-        .content {
-            padding: 30px;
-        }
-
+        /* Page-specific overrides */
         .status-section {
-            margin-bottom: 30px;
+            margin-bottom: var(--hpe-space-6);
         }
 
         .status-card {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 25px;
-            margin-bottom: 20px;
-            border-left: 5px solid #667eea;
+            background: var(--hpe-white);
+            border-radius: var(--hpe-radius-lg);
+            padding: var(--hpe-space-6);
+            margin-bottom: var(--hpe-space-5);
+            border-left: 5px solid var(--hpe-green);
+            box-shadow: var(--hpe-shadow-md);
         }
 
         .status-title {
-            font-size: 1.4em;
+            font-size: 1.4rem;
             font-weight: 600;
-            color: #333;
-            margin-bottom: 15px;
+            color: var(--hpe-gray-900);
+            margin-bottom: var(--hpe-space-4);
+            display: flex;
+            align-items: center;
         }
 
-        .progress-container {
-            background: #e9ecef;
-            border-radius: 25px;
-            height: 20px;
-            overflow: hidden;
-            margin-bottom: 15px;
-        }
-
-        .progress-bar {
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            height: 100%;
-            border-radius: 25px;
-            transition: width 0.5s ease;
-            position: relative;
-            min-width: 0%;
+        .current-step {
+            font-size: 1.2rem;
+            color: var(--hpe-green);
+            font-weight: 600;
+            margin-bottom: var(--hpe-space-3);
         }
 
         .progress-text {
             text-align: center;
             font-weight: 600;
-            color: #333;
-            margin-top: 5px;
-        }
-
-        .current-step {
-            font-size: 1.2em;
-            color: #667eea;
-            font-weight: 600;
-            margin-bottom: 10px;
+            color: var(--hpe-gray-900);
+            margin-top: var(--hpe-space-2);
         }
 
         .interactive-section {
-            background: #fff3cd;
+            background: var(--hpe-alert-warning);
             border: 1px solid #ffeaa7;
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
+            border-radius: var(--hpe-radius-lg);
+            padding: var(--hpe-space-5);
+            margin: var(--hpe-space-5) 0;
             text-align: center;
         }
 
         .interactive-section h3 {
             color: #856404;
-            margin-bottom: 15px;
+            margin-bottom: var(--hpe-space-4);
+        }
+
+        .interactive-section p {
+            color: #856404;
+            margin-bottom: var(--hpe-space-4);
         }
 
         .interactive-btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: linear-gradient(135deg, var(--hpe-green) 0%, var(--hpe-blue) 100%);
+            color: var(--hpe-white);
             border: none;
-            padding: 15px 30px;
-            border-radius: 8px;
-            font-size: 1.1em;
+            padding: var(--hpe-space-4) var(--hpe-space-6);
+            border-radius: var(--hpe-radius-md);
+            font-size: 1.1rem;
             cursor: pointer;
             transition: transform 0.2s ease;
-            margin: 10px;
+            margin: var(--hpe-space-3);
             text-decoration: none;
             display: inline-block;
+            font-weight: 600;
         }
 
         .interactive-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+            box-shadow: var(--hpe-shadow-md);
+            color: var(--hpe-white);
         }
 
         .interactive-btn:disabled {
-            background: #ccc;
+            background: var(--hpe-gray-400);
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
         }
 
-        .logs-section {
-            margin-top: 30px;
-        }
-
-        .logs-container {
-            background: #1e1e1e;
-            border-radius: 10px;
-            padding: 20px;
-            height: 400px;
-            overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            color: #fff;
-        }
-
-        .log-entry {
-            margin-bottom: 8px;
-            line-height: 1.4;
-        }
-
-        .log-entry.info {
-            color: #17a2b8;
-        }
-
-        .log-entry.success {
-            color: #28a745;
-        }
-
-        .log-entry.error {
-            color: #dc3545;
-        }
-
-        .log-entry.warning {
-            color: #ffc107;
-        }
-
-        .controls {
-            margin-top: 20px;
-            text-align: center;
-        }
-
-        .control-btn {
-            background: #dc3545;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            margin: 0 10px;
-        }
-
-        .control-btn:hover {
-            background: #c82333;
-        }
-
-        .status-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
-
-        .status-idle { background: #6c757d; }
-        .status-running { 
-            background: #28a745; 
-            animation: pulse 1.5s infinite;
-        }
-        .status-completed { background: #007bff; }
-        .status-error { background: #dc3545; }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-
         .completion-section {
-            background: #d4edda;
+            background: var(--hpe-alert-success);
             border: 1px solid #c3e6cb;
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
+            border-radius: var(--hpe-radius-lg);
+            padding: var(--hpe-space-5);
+            margin: var(--hpe-space-5) 0;
             text-align: center;
         }
 
         .completion-section h3 {
             color: #155724;
-            margin-bottom: 15px;
+            margin-bottom: var(--hpe-space-4);
+        }
+
+        .completion-section p {
+            color: #155724;
+            margin-bottom: var(--hpe-space-4);
         }
 
         .download-links {
-            margin: 15px 0;
+            margin: var(--hpe-space-4) 0;
         }
 
         .download-btn {
-            background: #28a745;
-            color: white;
+            background: var(--hpe-success);
+            color: var(--hpe-white);
             text-decoration: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            margin: 5px;
+            padding: var(--hpe-space-3) var(--hpe-space-5);
+            border-radius: var(--hpe-radius-md);
+            margin: var(--hpe-space-2);
             display: inline-block;
+            font-weight: 500;
+            transition: transform 0.2s ease;
         }
 
         .download-btn:hover {
             background: #218838;
+            transform: translateY(-2px);
+            box-shadow: var(--hpe-shadow-md);
+            color: var(--hpe-white);
         }
 
         .error-section {
-            background: #f8d7da;
+            background: var(--hpe-alert-danger);
             border: 1px solid #f5c6cb;
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
+            border-radius: var(--hpe-radius-lg);
+            padding: var(--hpe-space-5);
+            margin: var(--hpe-space-5) 0;
             text-align: center;
         }
 
         .error-section h3 {
             color: #721c24;
-            margin-bottom: 15px;
+            margin-bottom: var(--hpe-space-4);
         }
 
-        @media (max-width: 768px) {
-            .container {
-                margin: 10px;
-            }
-            
-            .content {
-                padding: 20px;
-            }
-            
-            .logs-container {
-                height: 300px;
-                font-size: 12px;
-            }
+        .error-section p {
+            color: #721c24;
+            margin-bottom: var(--hpe-space-4);
+        }
+
+        .logs-section {
+            margin-top: var(--hpe-space-6);
+        }
+
+        .logs-section h3 {
+            color: var(--hpe-gray-900);
+            margin-bottom: var(--hpe-space-4);
+        }
+
+        .controls {
+            margin-top: var(--hpe-space-5);
+            text-align: center;
+        }
+
+        .control-btn {
+            background: var(--hpe-danger);
+            color: var(--hpe-white);
+            border: none;
+            padding: var(--hpe-space-3) var(--hpe-space-5);
+            border-radius: var(--hpe-radius-md);
+            cursor: pointer;
+            margin: 0 var(--hpe-space-3);
+            font-weight: 500;
+            transition: transform 0.2s ease;
+        }
+
+        .control-btn:hover {
+            background: #c82333;
+            transform: translateY(-2px);
+            box-shadow: var(--hpe-shadow-md);
+        }
+
+        .control-btn.secondary {
+            background: var(--hpe-gray-600);
+        }
+
+        .control-btn.secondary:hover {
+            background: var(--hpe-gray-700);
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
+<body class="hpe-page-wrapper">
+    <div class="hpe-container">
+        <div class="hpe-header">
             <h1>🎥 Video2Notes Workflow</h1>
             <p>Processing your video...</p>
         </div>
 
-        <div class="content">
-            <!-- Status Section -->
-            <div class="status-section">
-                <div class="status-card">
-                    <div class="status-title">
-                        <span id="status-indicator" class="status-indicator status-idle"></span>
-                        Workflow Status: <span id="status-text">Starting...</span>
-                    </div>
-                    
-                    <div class="current-step" id="current-step">Initializing...</div>
-                    
-                    <div class="progress-container">
-                        <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
-                    </div>
-                    <div class="progress-text">
-                        <span id="progress-text">0%</span> Complete
-                    </div>
+        <!-- Status Section -->
+        <div class="status-section">
+            <div class="status-card">
+                <div class="status-title">
+                    <span id="status-indicator" class="hpe-status-indicator hpe-status-idle"></span>
+                    Workflow Status: <span id="status-text">Starting...</span>
+                </div>
+                
+                <div class="current-step" id="current-step">Initializing...</div>
+                
+                <div class="hpe-progress">
+                    <div class="hpe-progress-bar" id="progress-bar" style="width: 0%"></div>
+                </div>
+                <div class="progress-text">
+                    <span id="progress-text">0%</span> Complete
                 </div>
             </div>
+        </div>
 
-            <!-- Interactive Section (shown when needed) -->
-            <div class="interactive-section" id="interactive-section" style="display: none;">
-                <h3 id="interactive-title">Interactive Step Required</h3>
-                <p id="interactive-description">Please complete the interactive step to continue.</p>
-                <div id="interactive-buttons">
-                    <a href="/open_slides" target="_blank" class="interactive-btn" id="slides-btn" style="display: none;">
-                        🖼️ Open Slide Selector
-                    </a>
-                    <a href="/open_speakers" target="_blank" class="interactive-btn" id="speakers-btn" style="display: none;">
-                        🎤 Open Speaker Labeler
-                    </a>
-                </div>
+        <!-- Interactive Section (shown when needed) -->
+        <div class="interactive-section hpe-hidden" id="interactive-section">
+            <h3 id="interactive-title">Interactive Step Required</h3>
+            <p id="interactive-description">Please complete the interactive step to continue.</p>
+            <div id="interactive-buttons">
+                <a href="/open_slides" target="_blank" class="interactive-btn hpe-hidden" id="slides-btn">
+                    🖼️ Open Slide Selector
+                </a>
+                <a href="/open_speakers" target="_blank" class="interactive-btn hpe-hidden" id="speakers-btn">
+                    🎤 Open Speaker Labeler
+                </a>
             </div>
+        </div>
 
-            <!-- Completion Section -->
-            <div class="completion-section" id="completion-section" style="display: none;">
-                <h3>🎉 Workflow Completed Successfully!</h3>
-                <p>Your video has been processed and notes have been generated.</p>
-                <div class="download-links" id="download-links">
-                    <!-- Download links will be populated by JavaScript -->
-                </div>
-                <a href="/" class="interactive-btn">🔄 Process Another Video</a>
+        <!-- Completion Section -->
+        <div class="completion-section hpe-hidden" id="completion-section">
+            <h3>🎉 Workflow Completed Successfully!</h3>
+            <p>Your video has been processed and notes have been generated.</p>
+            <div class="download-links" id="download-links">
+                <!-- Download links will be populated by JavaScript -->
             </div>
+            <a href="/" class="interactive-btn">🔄 Process Another Video</a>
+        </div>
 
-            <!-- Error Section -->
-            <div class="error-section" id="error-section" style="display: none;">
-                <h3>❌ Workflow Failed</h3>
-                <p>An error occurred during processing. Please check the logs below for details.</p>
-                <a href="/" class="interactive-btn">🔄 Try Again</a>
-            </div>
+        <!-- Error Section -->
+        <div class="error-section hpe-hidden" id="error-section">
+            <h3>❌ Workflow Failed</h3>
+            <p>An error occurred during processing. Please check the logs below for details.</p>
+            <a href="/" class="interactive-btn">🔄 Try Again</a>
+        </div>
 
-            <!-- Logs Section -->
-            <div class="logs-section">
-                <h3>📋 Process Logs</h3>
-                <div class="logs-container" id="logs-container">
-                    <div class="log-entry">Waiting for workflow to start...</div>
-                </div>
+        <!-- Logs Section -->
+        <div class="logs-section">
+            <h3>📋 Process Logs</h3>
+            <div class="hpe-terminal" id="logs-container">
+                <div class="hpe-log-entry">Waiting for workflow to start...</div>
             </div>
+        </div>
 
-            <!-- Controls -->
-            <div class="controls">
-                <button class="control-btn" id="stop-btn" onclick="stopWorkflow()">🛑 Stop Workflow</button>
-                <button class="control-btn" onclick="clearLogs()" style="background: #6c757d;">🗑️ Clear Logs</button>
-            </div>
+        <!-- Controls -->
+        <div class="controls">
+            <button class="control-btn" id="stop-btn" onclick="stopWorkflow()">🛑 Stop Workflow</button>
+            <button class="control-btn secondary" onclick="clearLogs()">🗑️ Clear Logs</button>
         </div>
     </div>
 
     <script>
         let eventSource;
         let autoScroll = true;
+
+        // Helper function to format time in 24-hour format (HH:MM:SS) to match server-side logs
+        function formatTime24Hour(date) {
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            const seconds = date.getSeconds().toString().padStart(2, '0');
+            return `${hours}:${minutes}:${seconds}`;
+        }
 
         function initializeEventSource() {
             console.log('Initializing EventSource connection...');
@@ -395,14 +321,14 @@
             progressText.textContent = data.progress + '%';
             
             // Update status indicator
-            statusIndicator.className = 'status-indicator status-' + data.status;
+            statusIndicator.className = 'hpe-status-indicator hpe-status-' + data.status;
             
             // Add new log entries
             if (data.new_logs && data.new_logs.length > 0) {
                 const logsContainer = document.getElementById('logs-container');
                 data.new_logs.forEach(log => {
                     const logEntry = document.createElement('div');
-                    logEntry.className = 'log-entry';
+                    logEntry.className = 'hpe-log-entry';
                     
                     // Style based on content
                     if (log.includes('✅')) {
@@ -450,13 +376,13 @@
             const speakersBtn = document.getElementById('speakers-btn');
             
             if (data.interactive_stage && data.interactive_ready) {
-                interactiveSection.style.display = 'block';
+                interactiveSection.classList.remove('hpe-hidden');
                 
                 if (data.interactive_stage === 'slides') {
                     interactiveTitle.textContent = '🖼️ Slide Selection Required';
                     interactiveDescription.textContent = 'The slide selector will open automatically in a new tab. Please select the relevant slides to continue with the workflow. If the tab doesn\'t open, click the button below.';
-                    slidesBtn.style.display = 'inline-block';
-                    speakersBtn.style.display = 'none';
+                    slidesBtn.classList.remove('hpe-hidden');
+                    speakersBtn.classList.add('hpe-hidden');
                     
                     // Auto-open slide selector if not already opened
                     if (!window.slidesSelectorOpened) {
@@ -466,8 +392,8 @@
                             // Add notification that tab was opened
                             const logsContainer = document.getElementById('logs-container');
                             const logEntry = document.createElement('div');
-                            logEntry.className = 'log-entry warning';
-                            logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] 🔄 Automatically opened slide selector in new tab';
+                            logEntry.className = 'hpe-log-entry warning';
+                            logEntry.textContent = '[' + formatTime24Hour(new Date()) + '] 🔄 Automatically opened slide selector in new tab';
                             logsContainer.appendChild(logEntry);
                             logsContainer.scrollTop = logsContainer.scrollHeight;
                         }, 1000); // Small delay to ensure the UI is ready
@@ -475,8 +401,8 @@
                 } else if (data.interactive_stage === 'speakers') {
                     interactiveTitle.textContent = '🎤 Speaker Labeling Required';
                     interactiveDescription.textContent = 'The speaker labeler will open automatically in a new tab. Please label the speakers in your transcript. If the tab doesn\'t open, click the button below.';
-                    slidesBtn.style.display = 'none';
-                    speakersBtn.style.display = 'inline-block';
+                    slidesBtn.classList.add('hpe-hidden');
+                    speakersBtn.classList.remove('hpe-hidden');
                     
                     // Auto-open speaker labeler if not already opened
                     if (!window.speakerLabelerOpened) {
@@ -486,17 +412,17 @@
                             // Add notification that tab was opened
                             const logsContainer = document.getElementById('logs-container');
                             const logEntry = document.createElement('div');
-                            logEntry.className = 'log-entry warning';
-                            logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] 🔄 Automatically opened speaker labeler in new tab';
+                            logEntry.className = 'hpe-log-entry warning';
+                            logEntry.textContent = '[' + formatTime24Hour(new Date()) + '] 🔄 Automatically opened speaker labeler in new tab';
                             logsContainer.appendChild(logEntry);
                             logsContainer.scrollTop = logsContainer.scrollHeight;
                         }, 1000); // Small delay to ensure the UI is ready
                     }
                 }
             } else {
-                interactiveSection.style.display = 'none';
-                slidesBtn.style.display = 'none';
-                speakersBtn.style.display = 'none';
+                interactiveSection.classList.add('hpe-hidden');
+                slidesBtn.classList.add('hpe-hidden');
+                speakersBtn.classList.add('hpe-hidden');
                 
                 // Reset the opened flags when interactive stage ends
                 if (data.interactive_stage === null) {
@@ -510,7 +436,7 @@
             const completionSection = document.getElementById('completion-section');
             const downloadLinks = document.getElementById('download-links');
             
-            completionSection.style.display = 'block';
+            completionSection.classList.remove('hpe-hidden');
             
             // Get the current status to find available files
             fetch('/status')
@@ -525,7 +451,7 @@
                     } else {
                         // Fallback to generic links if no specific files are found
                         downloadLinks.innerHTML = `
-                            <p style="color: #666; font-style: italic;">No downloadable files found. Please check the output directory manually.</p>
+                            <p style="color: var(--hpe-gray-600); font-style: italic;">No downloadable files found. Please check the output directory manually.</p>
                         `;
                     }
                 })
@@ -533,13 +459,13 @@
                     console.error('Error fetching available files:', error);
                     // Fallback to generic message
                     downloadLinks.innerHTML = `
-                        <p style="color: #dc3545;">Error loading download links. Please check the logs or contact support.</p>
+                        <p style="color: var(--hpe-danger);">Error loading download links. Please check the logs or contact support.</p>
                     `;
                 });
         }
 
         function showErrorSection() {
-            document.getElementById('error-section').style.display = 'block';
+            document.getElementById('error-section').classList.remove('hpe-hidden');
         }
 
         function stopWorkflow() {
@@ -550,8 +476,8 @@
                         if (data.success) {
                             const logsContainer = document.getElementById('logs-container');
                             const logEntry = document.createElement('div');
-                            logEntry.className = 'log-entry warning';
-                            logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] 🛑 Workflow stopped by user';
+                            logEntry.className = 'hpe-log-entry warning';
+                            logEntry.textContent = '[' + formatTime24Hour(new Date()) + '] 🛑 Workflow stopped by user';
                             logsContainer.appendChild(logEntry);
                             logsContainer.scrollTop = logsContainer.scrollHeight;
                         }
@@ -562,7 +488,7 @@
 
         function clearLogs() {
             const logsContainer = document.getElementById('logs-container');
-            logsContainer.innerHTML = '<div class="log-entry">Logs cleared...</div>';
+            logsContainer.innerHTML = '<div class="hpe-log-entry">Logs cleared...</div>';
         }
 
         // Toggle auto-scroll

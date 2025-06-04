@@ -935,84 +935,57 @@ def render_slide_page(title, header_title, content):
     """Render a full HTML page with a common base layout for slide selector."""
     base_template = """
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
       <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>{{ title }}</title>
+      <link rel="stylesheet" href="/static/css/hpe-design.css">
       <style>
-         body { 
-             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-             margin: 0; 
-             padding: 0; 
-             background: #f2f2f2; 
+         /* Page-specific overrides for slide selector */
+         .vocabulary-section {
+             margin-top: var(--hpe-space-6);
+             padding: var(--hpe-space-5);
+             background: var(--hpe-gray-100);
+             border-radius: var(--hpe-radius-md);
          }
-         header { 
-             padding: 20px; 
-             background-color: #0078D7; 
-             color: white; 
-             text-align: center; 
+         
+         .vocabulary-controls {
+             display: flex;
+             align-items: center;
+             gap: var(--hpe-space-3);
+             margin-bottom: var(--hpe-space-4);
          }
-         .container { 
-             margin: 20px auto; 
-             max-width: 1000px; 
-             background: white; 
-             padding: 20px; 
-             border-radius: 8px; 
-             box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+         
+         .vocabulary-result {
+             background: var(--hpe-white);
+             border: 1px solid var(--hpe-gray-300);
+             border-radius: var(--hpe-radius-md);
+             padding: var(--hpe-space-4);
+             margin-top: var(--hpe-space-4);
          }
-         .slide { 
-             margin-bottom: 20px; 
-             display: flex; 
-             align-items: center; 
-             border-bottom: 1px solid #ddd; 
-             padding-bottom: 20px;
+         
+         .vocabulary-content {
+             background: var(--hpe-gray-100);
+             padding: var(--hpe-space-4);
+             border-radius: var(--hpe-radius-md);
+             margin: var(--hpe-space-3) 0;
+             white-space: pre-wrap;
+             font-family: var(--hpe-font-mono);
+             font-size: 0.9rem;
          }
-         img { 
-             max-width: 100%; 
-             height: auto; 
-             display: block; 
-         }
-         .checkbox { 
-             margin-left: 20px; 
-             font-size: 1.2em; 
-             white-space: nowrap;
-         }
-         .checkbox input[type="checkbox"] {
-             transform: scale(1.4);
-             margin-right: 6px;
-         }
-         .button-group { 
-             margin-top: 20px; 
-         }
-         .btn { 
-             padding: 10px 20px; 
-             border: none; 
-             border-radius: 4px; 
-             background-color: #0078D7; 
-             color: white; 
-             cursor: pointer; 
-             text-decoration: none; 
-             font-size: 1em;
-         }
-         .btn:hover { 
-             background-color: #005a9e; 
-         }
-         form { 
-             display: inline; 
-         }
-         .row { 
-             margin-top: 20px;
-         }
-         .select-model {
-             padding: 8px 12px; 
-             border-radius: 4px; 
-             margin-right: 8px;
+         
+         .vocabulary-status {
+             margin-top: var(--hpe-space-3);
+             font-weight: 500;
          }
       </style>
     </head>
-    <body>
-      <header><h1>{{ header_title }}</h1></header>
-      <div class="container">
+    <body class="hpe-page-wrapper">
+      <div class="hpe-container">
+        <div class="hpe-header">
+          <h1>{{ header_title }}</h1>
+        </div>
         {{ content|safe }}
       </div>
     </body>
@@ -1047,7 +1020,7 @@ def select_slides_index():
     """Slide selector main page"""
     if not slide_selector_state['active'] or not slide_selector_state['slides']:
         return render_slide_page("Error", "Slide Selector", 
-                                "<p>Slide selector is not active or no slides available.</p>")
+                                '<div class="hpe-alert hpe-alert-danger"><p>Slide selector is not active or no slides available.</p></div>')
     
     slides = slide_selector_state['slides']
     folder_path = slide_selector_state['folder_path']
@@ -1057,9 +1030,9 @@ def select_slides_index():
     for slide in slides:
         image_url = url_for('slide_images', filename=slide["relative_path"])
         slide_html = f"""
-        <div class="slide">
+        <div class="hpe-slide">
             <img src="{image_url}" alt="Slide {slide['group_id']}" style="max-width: 600px;">
-            <div class="checkbox">
+            <div class="hpe-slide-checkbox">
                 <input type="checkbox" id="slide_{slide['group_id']}" name="slides" value="{slide['group_id']}" checked>
                 <label for="slide_{slide['group_id']}">Slide {slide['group_id']}</label>
             </div>
@@ -1069,27 +1042,35 @@ def select_slides_index():
     
     # Form content
     form_content = f"""
-    <form action="{url_for('save_slide_selection')}" method="post">
-        {''.join(slides_html)}
-        <div class="button-group">
-            <input type="submit" class="btn" value="Save Selection">
+    <div class="hpe-card">
+        <div class="hpe-card-header">
+            <h3 class="hpe-card-title">🖼️ Select Slides</h3>
         </div>
-    </form>
+        <form action="{url_for('save_slide_selection')}" method="post">
+            {''.join(slides_html)}
+            <div class="hpe-mt-5">
+                <button type="submit" class="hpe-btn hpe-btn-primary hpe-btn-lg">💾 Save Selection</button>
+            </div>
+        </form>
+    </div>
     
-    <div class="row">
-        <h3>Extract Vocabulary</h3>
-        <div style="margin-bottom: 15px;">
-            <label for="model">Model:</label>
-            <select id="model" class="select-model">
+    <div class="vocabulary-section">
+        <h3 class="hpe-card-title">🔤 Extract Vocabulary</h3>
+        <p class="hpe-mb-4">Extract domain-specific vocabulary from selected slides to improve transcription accuracy.</p>
+        
+        <div class="vocabulary-controls">
+            <label for="model" class="hpe-label">Model:</label>
+            <select id="model" class="hpe-select" style="max-width: 300px;">
                 <option value="bedrock/claude-4-sonnet">Claude 4 Sonnet</option>
                 <option value="openai/gpt-4o">GPT-4o</option>
             </select>
-            <button type="button" class="btn" onclick="extractVocabulary()">Extract Vocabulary</button>
+            <button type="button" class="hpe-btn hpe-btn-secondary" onclick="extractVocabulary()">🔤 Extract Vocabulary</button>
         </div>
-        <div id="vocabulary-result" style="display: none;">
-            <h4>Extracted Vocabulary:</h4>
-            <div id="vocabulary-content" style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 10px 0; white-space: pre-wrap;"></div>
-            <div id="vocabulary-status" style="margin-top: 10px;"></div>
+        
+        <div id="vocabulary-result" class="vocabulary-result hpe-hidden">
+            <h4 class="hpe-mb-3">📝 Extracted Vocabulary:</h4>
+            <div id="vocabulary-content" class="vocabulary-content"></div>
+            <div id="vocabulary-status" class="vocabulary-status"></div>
         </div>
     </div>
     
@@ -1113,9 +1094,9 @@ def select_slides_index():
         const contentDiv = document.getElementById('vocabulary-content');
         const statusDiv = document.getElementById('vocabulary-status');
         
-        resultDiv.style.display = 'block';
-        contentDiv.textContent = 'Extracting vocabulary...';
-        statusDiv.textContent = '';
+        resultDiv.classList.remove('hpe-hidden');
+        contentDiv.innerHTML = '<div class="hpe-spinner"></div> Extracting vocabulary...';
+        statusDiv.innerHTML = '';
         
         // Make AJAX request
         fetch('{url_for('extract_vocabulary_ajax')}', {{
@@ -1132,15 +1113,15 @@ def select_slides_index():
         .then(data => {{
             if (data.success) {{
                 contentDiv.textContent = data.vocabulary;
-                statusDiv.innerHTML = '<span style="color: green;">✅ ' + data.message + '</span>';
+                statusDiv.innerHTML = '<span style="color: var(--hpe-success);">✅ ' + data.message + '</span>';
             }} else {{
                 contentDiv.textContent = 'Error: ' + data.error;
-                statusDiv.innerHTML = '<span style="color: red;">❌ Failed to extract vocabulary</span>';
+                statusDiv.innerHTML = '<span style="color: var(--hpe-danger);">❌ Failed to extract vocabulary</span>';
             }}
         }})
         .catch(error => {{
             contentDiv.textContent = 'Error: ' + error;
-            statusDiv.innerHTML = '<span style="color: red;">❌ Network error</span>';
+            statusDiv.innerHTML = '<span style="color: var(--hpe-danger);">❌ Network error</span>';
         }});
     }}
     </script>
@@ -1174,8 +1155,16 @@ def save_slide_selection():
     # Deactivate slide selector
     slide_selector_state['active'] = False
     
-    return render_slide_page("Selection Saved", "Video2Notes - Slide Selector", 
-                            f"<p>Selection saved successfully! {len(pruned)} slides selected.</p><p>You can close this tab and return to the main workflow.</p>")
+    success_content = f"""
+    <div class="hpe-alert hpe-alert-success hpe-text-center">
+        <h3>🎉 Selection Saved Successfully!</h3>
+        <p><strong>{len(pruned)} slides</strong> have been selected and saved.</p>
+        <p>You can now close this tab and return to the main workflow.</p>
+        <a href="/" class="hpe-btn hpe-btn-primary hpe-mt-4">🔄 Process Another Video</a>
+    </div>
+    """
+    
+    return render_slide_page("Selection Saved", "Video2Notes - Slide Selector", success_content)
 
 @app.route('/extract-vocabulary-ajax', methods=['POST'])
 def extract_vocabulary_ajax():
@@ -1369,7 +1358,13 @@ def update_transcript_with_labels():
     updated_content = speaker_labeler_state['transcript_content']
     speaker_mapping = speaker_labeler_state['speaker_mapping']
     
+    # Debug logging
+    log_message(f"DEBUG: update_transcript_with_labels called with mapping: {speaker_mapping}")
+    
     pattern = re.compile(r'\*\*(SPEAKER_\d{2})( \[[0-9:.]+\]:)\*\*')
+    
+    replacements_made = []
+    
     def replace_func(match):
         spk = match.group(1)
         rest = match.group(2)
@@ -1377,12 +1372,20 @@ def update_transcript_with_labels():
         
         if label != spk:
             formatted_label = f"SPEAKER - {label}"
+            replacements_made.append(f"{spk} -> SPEAKER - {label}")
         else:
             formatted_label = label
+            replacements_made.append(f"{spk} -> {label} (unchanged)")
             
         return f'**{formatted_label}{rest}**'
     
     updated_content = pattern.sub(replace_func, updated_content)
+    
+    # Debug logging
+    log_message(f"DEBUG: Made {len(replacements_made)} replacements:")
+    for replacement in replacements_made:
+        log_message(f"DEBUG:   {replacement}")
+    
     return updated_content
 
 def initialize_speaker_labeler(audio_path, transcript_path):
@@ -1416,13 +1419,29 @@ def initialize_speaker_labeler(audio_path, transcript_path):
 def label_speakers_index():
     """Speaker labeling main page"""
     if not speaker_labeler_state['active'] or not speaker_labeler_state['speaker_ids']:
-        return render_template_string("""
-        <!doctype html>
-        <html>
-        <head><title>Speaker Labeling</title></head>
-        <body>
-            <h2>Speaker Labeling Not Available</h2>
+        error_content = """
+        <div class="hpe-alert hpe-alert-danger hpe-text-center">
+            <h3>❌ Speaker Labeling Not Available</h3>
             <p>Speaker labeler is not active or no speakers found.</p>
+            <a href="/" class="hpe-btn hpe-btn-primary hpe-mt-4">🏠 Return to Main Page</a>
+        </div>
+        """
+        return render_template_string("""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Speaker Labeling</title>
+            <link rel="stylesheet" href="/static/css/hpe-design.css">
+        </head>
+        <body class="hpe-page-wrapper">
+            <div class="hpe-container">
+                <div class="hpe-header">
+                    <h1>🎤 Speaker Labeling</h1>
+                </div>
+                """ + error_content + """
+            </div>
         </body>
         </html>
         """)
@@ -1435,48 +1454,83 @@ def label_speakers_index():
     
     current_speaker = speaker_ids[current_index]
     
-    html = '''
-    <!doctype html>
-    <html>
+    html = f'''
+    <!DOCTYPE html>
+    <html lang="en">
     <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Speaker Labeling</title>
+        <link rel="stylesheet" href="/static/css/hpe-design.css">
         <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .container { max-width: 600px; margin: 0 auto; }
-            audio { width: 100%; margin: 20px 0; }
-            input[type="text"] { width: 300px; padding: 10px; margin: 10px 0; }
-            input[type="submit"] { padding: 10px 20px; background-color: #007cba; color: white; border: none; cursor: pointer; }
-            input[type="submit"]:hover { background-color: #005a87; }
-            .info { background-color: #f0f8ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
+            .speaker-audio {{
+                width: 100%;
+                margin: var(--hpe-space-5) 0;
+            }}
+            
+            .speaker-form {{
+                margin-top: var(--hpe-space-5);
+            }}
+            
+            .progress-info {{
+                background: var(--hpe-gray-100);
+                padding: var(--hpe-space-4);
+                border-radius: var(--hpe-radius-md);
+                margin-bottom: var(--hpe-space-5);
+                text-align: center;
+            }}
         </style>
     </head>
-    <body>
-        <div class="container">
-            <h2>Label Speaker ({{ current_index + 1 }} of {{ total_speakers }})</h2>
-            <div class="info">
-                <p><strong>Current Speaker ID:</strong> {{ speaker_id }}</p>
-                <p><strong>Instructions:</strong> Listen to the audio clip and enter a name for this speaker. Leave blank to keep the original speaker ID.</p>
+    <body class="hpe-page-wrapper">
+        <div class="hpe-container">
+            <div class="hpe-header">
+                <h1>🎤 Speaker Labeling</h1>
+                <p>Assign names to speakers in your transcript</p>
             </div>
-            <p>
-                <audio controls autoplay>
-                    <source src="{{ url_for('play_speaker_audio', speaker_id=speaker_id) }}" type="audio/wav">
+            
+            <div class="progress-info">
+                <h3 class="hpe-mb-2">Speaker {current_index + 1} of {len(speaker_ids)}</h3>
+                <div class="hpe-progress">
+                    <div class="hpe-progress-bar" style="width: {((current_index) / len(speaker_ids)) * 100}%"></div>
+                </div>
+                <p class="hpe-mt-2">{current_index} of {len(speaker_ids)} speakers labeled</p>
+            </div>
+            
+            <div class="hpe-card">
+                <div class="hpe-card-header">
+                    <h3 class="hpe-card-title">Current Speaker: {current_speaker}</h3>
+                </div>
+                
+                <div class="hpe-alert hpe-alert-info">
+                    <p><strong>Instructions:</strong> Listen to the audio clip and enter a name for this speaker. Leave blank to keep the original speaker ID.</p>
+                </div>
+                
+                <audio controls autoplay class="speaker-audio">
+                    <source src="{url_for('play_speaker_audio', speaker_id=current_speaker)}" type="audio/wav">
                     Your browser does not support the audio element.
                 </audio>
-            </p>
-            <form action="{{ url_for('label_speaker') }}" method="post">
-                <input type="hidden" name="speaker_id" value="{{ speaker_id }}">
-                <label for="label">Enter Speaker Name (optional):</label><br>
-                <input type="text" id="label" name="label" placeholder="e.g., John, Alice, or leave blank for {{ speaker_id }}">
-                <input type="submit" value="Submit">
-            </form>
+                
+                <form action="{url_for('label_speaker')}" method="post" class="speaker-form">
+                    <input type="hidden" name="speaker_id" value="{current_speaker}">
+                    
+                    <div class="hpe-form-group">
+                        <label for="label" class="hpe-label">Enter Speaker Name (optional):</label>
+                        <input type="text" id="label" name="label" 
+                               placeholder="e.g., John, Alice, or leave blank for {current_speaker}"
+                               class="hpe-input">
+                        <div class="help-text">Enter a human-readable name for this speaker, or leave blank to keep the original ID.</div>
+                    </div>
+                    
+                    <button type="submit" class="hpe-btn hpe-btn-primary hpe-btn-lg">
+                        ➡️ {('Complete Labeling' if current_index >= len(speaker_ids) - 1 else 'Next Speaker')}
+                    </button>
+                </form>
+            </div>
         </div>
     </body>
     </html>
     '''
-    return render_template_string(html, 
-                                 speaker_id=current_speaker, 
-                                 current_index=current_index, 
-                                 total_speakers=len(speaker_ids))
+    return html
 
 @app.route('/play-speaker-audio/<speaker_id>')
 def play_speaker_audio(speaker_id):
@@ -1503,11 +1557,19 @@ def label_speaker():
     speaker_id = request.form.get('speaker_id')
     label = request.form.get('label', '').strip()
     
+    # Debug logging
+    log_message(f"DEBUG: Received speaker_id: '{speaker_id}'")
+    log_message(f"DEBUG: Received label: '{label}'")
+    log_message(f"DEBUG: Current speaker_mapping before update: {speaker_labeler_state['speaker_mapping']}")
+    
     if label:
         speaker_labeler_state['speaker_mapping'][speaker_id] = label
         log_message(f"Speaker {speaker_id} labeled as: {label}")
     else:
         log_message(f"Speaker {speaker_id} kept original name")
+    
+    # Debug logging after update
+    log_message(f"DEBUG: Current speaker_mapping after update: {speaker_labeler_state['speaker_mapping']}")
     
     # Move to next speaker
     speaker_labeler_state['current_index'] += 1
@@ -1519,52 +1581,70 @@ def speaker_labeling_result():
     """Show speaker labeling completion page"""
     speaker_mapping = speaker_labeler_state['speaker_mapping']
     
+    # Debug logging
+    log_message(f"DEBUG: Final speaker_mapping: {speaker_mapping}")
+    log_message(f"DEBUG: Available speaker_ids: {speaker_labeler_state['speaker_ids']}")
+    
     # Generate updated transcript
     updated_transcript = update_transcript_with_labels()
     
     # Save updated transcript
     output_path = speaker_labeler_state['output_transcript_path']
+    log_message(f"DEBUG: Saving updated transcript to: {output_path}")
+    
     try:
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(updated_transcript)
         save_message = f"Updated transcript saved to: {output_path}"
+        save_status = "success"
+        log_message(f"DEBUG: Successfully saved transcript with {len(updated_transcript)} characters")
     except Exception as e:
         save_message = f"Error saving transcript: {e}"
+        save_status = "danger"
+        log_message(f"DEBUG: Error saving transcript: {e}")
     
     # Deactivate speaker labeler
     speaker_labeler_state['active'] = False
     
-    html = f'''
-    <!doctype html>
-    <html>
-    <head>
-        <title>Speaker Labeling Complete</title>
-        <style>
-            body {{ font-family: Arial, sans-serif; margin: 40px; }}
-            .container {{ max-width: 600px; margin: 0 auto; }}
-            .success {{ background-color: #d4edda; padding: 15px; border-radius: 5px; margin: 20px 0; }}
-            .mapping {{ background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h2>🎉 Speaker Labeling Complete!</h2>
-            <div class="success">
-                <p>{save_message}</p>
-            </div>
-            <div class="mapping">
-                <h3>Speaker Mappings:</h3>
-                <ul>
-    '''
-    
+    # Build mapping display
+    mapping_items = ""
     for speaker_id in speaker_labeler_state['speaker_ids']:
         label = speaker_mapping.get(speaker_id, speaker_id)
-        html += f'<li>{speaker_id} → {label}</li>'
+        mapping_items += f'<li><strong>{speaker_id}</strong> → <em>{label}</em></li>'
     
-    html += '''
+    html = f'''
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Speaker Labeling Complete</title>
+        <link rel="stylesheet" href="/static/css/hpe-design.css">
+    </head>
+    <body class="hpe-page-wrapper">
+        <div class="hpe-container">
+            <div class="hpe-header">
+                <h1>🎉 Speaker Labeling Complete!</h1>
+                <p>All speakers have been successfully labeled</p>
+            </div>
+            
+            <div class="hpe-alert hpe-alert-{save_status}">
+                <p>{save_message}</p>
+            </div>
+            
+            <div class="hpe-card">
+                <div class="hpe-card-header">
+                    <h3 class="hpe-card-title">📋 Speaker Mappings</h3>
+                </div>
+                <ul class="hpe-mb-0">
+                    {mapping_items}
                 </ul>
             </div>
-            <p>You can close this tab and return to the main workflow.</p>
+            
+            <div class="hpe-text-center hpe-mt-6">
+                <p class="hpe-mb-4">You can now close this tab and return to the main workflow.</p>
+                <a href="/" class="hpe-btn hpe-btn-primary hpe-btn-lg">🏠 Return to Main Page</a>
+            </div>
         </div>
     </body>
     </html>
@@ -1604,6 +1684,12 @@ def debug_files():
         })
     except Exception as e:
         return jsonify({'error': f'Error listing files: {str(e)}'})
+
+# Static files route for CSS
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    """Serve static files (CSS, JS, etc.)"""
+    return send_from_directory('static', filename)
 
 if __name__ == '__main__':
     # Set up logging
