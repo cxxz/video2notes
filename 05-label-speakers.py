@@ -360,14 +360,12 @@ if __name__ == '__main__':
     initialize(args.audio_file, args.transcript_path)
     
     # Start browser in a separate thread
-    if LOCAL_SERVER == 'true':
-        browser_thread = threading.Thread(target=open_browser)
-        browser_thread.daemon = True
-        browser_thread.start()
+    # if LOCAL_SERVER == 'true':
+    #     browser_thread = threading.Thread(target=open_browser)
+    #     browser_thread.daemon = True
+    #     browser_thread.start()
     
     print("Speaker labeling web interface starting...")
-    print("Opening browser automatically...")
-    print(f"If browser doesn't open, go to: http://localhost:{SPEAKER_LABELER_PORT}")
     
     # Start the Flask app. In production, consider using a production server.
     app.run(host='0.0.0.0', port=SPEAKER_LABELER_PORT, debug=False)

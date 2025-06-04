@@ -556,16 +556,16 @@
                     <div class="form-group">
                         <label>Input Method</label>
                         <div class="input-method-toggle">
-                            <input type="radio" id="method_upload" name="input_method" value="upload" checked>
-                            <label for="method_upload" class="toggle-label">📁 Upload File</label>
-                            
-                            <input type="radio" id="method_path" name="input_method" value="path">
+                            <input type="radio" id="method_path" name="input_method" value="path" checked>
                             <label for="method_path" class="toggle-label">📝 Enter Path</label>
+                            
+                            <input type="radio" id="method_upload" name="input_method" value="upload">
+                            <label for="method_upload" class="toggle-label">📁 Upload File</label>
                         </div>
                     </div>
                     
                     <!-- File upload section -->
-                    <div id="upload_section" class="input-section">
+                    <div id="upload_section" class="input-section" style="display: none;">
                         <div class="form-group">
                             <label for="video_file">Select Video File</label>
                             <div class="file-upload-container">
@@ -594,12 +594,12 @@
                     </div>
                     
                     <!-- Manual path section -->
-                    <div id="path_section" class="input-section" style="display: none;">
+                    <div id="path_section" class="input-section">
                         <div class="form-group">
                             <label for="video_path">Video File Path <span class="required">*</span></label>
                             <div class="path-input-container">
                                 <input type="text" id="video_path" name="video_path" 
-                                       placeholder="/path/to/your/video.mp4">
+                                       placeholder="/path/to/your/video.mp4" required>
                                 <button type="button" class="browse-btn">📁 Browse</button>
                             </div>
                             <div class="help-text">Full path to your video file on the server</div>

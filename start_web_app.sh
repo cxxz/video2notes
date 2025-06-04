@@ -54,27 +54,9 @@ if [ -z "$HF_TOKEN" ]; then
     echo "   This is required for Whisper transcription and speaker diarization"
 fi
 
-# Display network information
-echo ""
-echo "🌐 Network Information:"
-echo "   Main Application:    http://localhost:5001"
-echo "   Slide Selector:      http://localhost:5002 (auto-launched)"
-echo "   Speaker Labeler:     http://localhost:5006 (auto-launched)"
-echo ""
-echo "📁 Upload Information:"
-echo "   Users can now upload video files directly through the web interface"
-echo "   Supported formats: MP4, AVI, MOV, MKV, WMV, FLV, WebM, M4V, MPG, MPEG"
-echo "   Maximum file size: 2GB"
-echo ""
-
-# Create logs directory
-mkdir -p logs
-
 # Start the application
 echo "🎬 Starting Video2Notes Web Application..."
-echo "   Access the application at: http://localhost:5000"
-echo "   Press Ctrl+C to stop the application"
 echo ""
 
 # Run the Flask app
-python3 app.py 2>&1 | tee logs/app_$(date +%Y%m%d_%H%M%S).log 
+python app.py 2>&1 | tee logs/app_$(date +%Y%m%d_%H%M%S).log 

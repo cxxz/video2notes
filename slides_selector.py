@@ -336,11 +336,11 @@ def run_slide_selector(folder_path):
     def get_image(filename):
         return send_from_directory(folder_path, filename)
     
-    def open_browser():
-        webbrowser.open_new(f"http://127.0.0.1:{SLIDE_SELECTOR_PORT}")
+    # def open_browser():
+    #     webbrowser.open_new(f"http://127.0.0.1:{SLIDE_SELECTOR_PORT}")
     
-    if LOCAL_SERVER == 'true':
-        threading.Timer(1.0, open_browser).start()
+    # if LOCAL_SERVER == 'true':
+    #     threading.Timer(1.0, open_browser).start()
     
     # Run Flask server in a separate thread.
     from werkzeug.serving import make_server

@@ -454,19 +454,55 @@
                 
                 if (data.interactive_stage === 'slides') {
                     interactiveTitle.textContent = '🖼️ Slide Selection Required';
-                    interactiveDescription.textContent = 'Please select the relevant slides to continue with the workflow.';
+                    interactiveDescription.textContent = 'The slide selector will open automatically in a new tab. Please select the relevant slides to continue with the workflow. If the tab doesn\'t open, click the button below.';
                     slidesBtn.style.display = 'inline-block';
                     speakersBtn.style.display = 'none';
+                    
+                    // Auto-open slide selector if not already opened
+                    if (!window.slidesSelectorOpened) {
+                        window.slidesSelectorOpened = true;
+                        setTimeout(() => {
+                            window.open('/open_slides', '_blank');
+                            // Add notification that tab was opened
+                            const logsContainer = document.getElementById('logs-container');
+                            const logEntry = document.createElement('div');
+                            logEntry.className = 'log-entry warning';
+                            logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] 🔄 Automatically opened slide selector in new tab';
+                            logsContainer.appendChild(logEntry);
+                            logsContainer.scrollTop = logsContainer.scrollHeight;
+                        }, 1000); // Small delay to ensure the UI is ready
+                    }
                 } else if (data.interactive_stage === 'speakers') {
                     interactiveTitle.textContent = '🎤 Speaker Labeling Required';
-                    interactiveDescription.textContent = 'Please label the speakers in your transcript.';
+                    interactiveDescription.textContent = 'The speaker labeler will open automatically in a new tab. Please label the speakers in your transcript. If the tab doesn\'t open, click the button below.';
                     slidesBtn.style.display = 'none';
                     speakersBtn.style.display = 'inline-block';
+                    
+                    // Auto-open speaker labeler if not already opened
+                    if (!window.speakerLabelerOpened) {
+                        window.speakerLabelerOpened = true;
+                        setTimeout(() => {
+                            window.open('/open_speakers', '_blank');
+                            // Add notification that tab was opened
+                            const logsContainer = document.getElementById('logs-container');
+                            const logEntry = document.createElement('div');
+                            logEntry.className = 'log-entry warning';
+                            logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] 🔄 Automatically opened speaker labeler in new tab';
+                            logsContainer.appendChild(logEntry);
+                            logsContainer.scrollTop = logsContainer.scrollHeight;
+                        }, 1000); // Small delay to ensure the UI is ready
+                    }
                 }
             } else {
                 interactiveSection.style.display = 'none';
                 slidesBtn.style.display = 'none';
                 speakersBtn.style.display = 'none';
+                
+                // Reset the opened flags when interactive stage ends
+                if (data.interactive_stage === null) {
+                    window.slidesSelectorOpened = false;
+                    window.speakerLabelerOpened = false;
+                }
             }
         }
 
@@ -476,12 +512,30 @@
             
             completionSection.style.display = 'block';
             
-            // Add download links (you can customize these based on your needs)
-            downloadLinks.innerHTML = `
-                <a href="/download/notes.md" class="download-btn">📄 Download Notes</a>
-                <a href="/download/transcript.json" class="download-btn">📝 Download Transcript</a>
-                <a href="/download/slides.zip" class="download-btn">🖼️ Download Slides</a>
-            `;
+            // Get the current status to find available files
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.available_files && data.available_files.length > 0) {
+                        const links = data.available_files.map(file => 
+                            `<a href="/download/${encodeURIComponent(file.filename)}" class="download-btn" title="${file.description}">${file.icon} Download ${file.name}</a>`
+                        ).join('\n                ');
+                        
+                        downloadLinks.innerHTML = links;
+                    } else {
+                        // Fallback to generic links if no specific files are found
+                        downloadLinks.innerHTML = `
+                            <p style="color: #666; font-style: italic;">No downloadable files found. Please check the output directory manually.</p>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching available files:', error);
+                    // Fallback to generic message
+                    downloadLinks.innerHTML = `
+                        <p style="color: #dc3545;">Error loading download links. Please check the logs or contact support.</p>
+                    `;
+                });
         }
 
         function showErrorSection() {
