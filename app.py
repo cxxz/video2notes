@@ -29,6 +29,47 @@ SAFE_BROWSE_DIRS = [
     app.config['UPLOAD_FOLDER']  # Upload folder
 ]
 
+LOCAL_SERVER = os.getenv('LOCAL_SERVER', 'false')
+
+def get_server_host():
+    app.logger.info(f"Whether to use local server: {LOCAL_SERVER}")
+    if LOCAL_SERVER == 'true':
+        return 'localhost'
+
+    """Get the server host/IP address from the request"""
+    # Try to get the host from the request
+    host = request.host.split(':')[0]  # Remove port if present
+    
+    # If it's localhost or 127.0.0.1, try to get actual IP
+    if host in ['localhost', '127.0.0.1', '0.0.0.0']:
+        # Try to get from X-Forwarded-Host header (if behind proxy)
+        forwarded_host = request.headers.get('X-Forwarded-Host')
+        if forwarded_host:
+            return forwarded_host.split(':')[0]
+        
+        # Try to get from Host header
+        if request.headers.get('Host'):
+            return request.headers.get('Host').split(':')[0]
+        
+        # If still localhost, try to get actual server IP
+        import socket
+        try:
+            # Connect to a remote address to get local IP
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(("8.8.8.8", 80))
+                local_ip = s.getsockname()[0]
+                return local_ip
+        except Exception:
+            # Fall back to localhost if all else fails
+            return 'localhost'
+    
+    return host
+
+SERVER_HOST = get_server_host()
+MAIN_APP_PORT = os.getenv('MAIN_APP_PORT', 5001)
+SLIDE_SELECTOR_PORT = os.getenv('SLIDE_SELECTOR_PORT', 5002)
+SPEAKER_LABELER_PORT = os.getenv('SPEAKER_LABELER_PORT', 5006)
+
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
@@ -563,13 +604,14 @@ def progress_stream():
     response.headers['Access-Control-Allow-Headers'] = 'Cache-Control'
     return response
 
+
 @app.route('/open_slides')
 def open_slides():
     """Redirect to slide selector"""
     if workflow_state['interactive_stage'] != 'slides' or not workflow_state['interactive_ready']:
         return jsonify({'error': 'Slide selector not ready'}), 400
     
-    return redirect('http://localhost:5002')
+    return redirect(f'http://{SERVER_HOST}:{SLIDE_SELECTOR_PORT}')
 
 @app.route('/open_speakers')
 def open_speakers():
@@ -577,7 +619,7 @@ def open_speakers():
     if workflow_state['interactive_stage'] != 'speakers' or not workflow_state['interactive_ready']:
         return jsonify({'error': 'Speaker labeler not ready'}), 400
     
-    return redirect('http://localhost:5006')
+    return redirect(f'http://{SERVER_HOST}:{SPEAKER_LABELER_PORT}')
 
 @app.route('/status')
 def status():
@@ -688,13 +730,9 @@ def upload_video():
 if __name__ == '__main__':
     # Set up logging
     logging.basicConfig(level=logging.INFO)
-    
-    app_host = os.getenv('APP_HOST', '0.0.0.0')
-    app_port = int(os.getenv('APP_PORT', 5001))
 
     logging.info("🚀 Starting Video2Notes Web Application")
-    logging.info(f"📝 Access the application at: http://{app_host}:{app_port}")
-    logging.info("🔧 Make sure ports 5002 (slide selector) and 5006 (speaker labeler) are available")
+    logging.info(f"🔧 Make sure ports {SLIDE_SELECTOR_PORT} (slide selector) and {SPEAKER_LABELER_PORT} (speaker labeler) are available")
     
 
-    app.run(host=app_host, port=app_port, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=MAIN_APP_PORT, debug=False, threaded=True)
