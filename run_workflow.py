@@ -130,6 +130,9 @@ def main():
         if ask_yes_no("Do you want to specify an initial timestamp for ROI selection?"):
             roi_timestamp = ask_timestamp("Enter timestamp in seconds: ")
 
+    do_label_speakers = ask_yes_no("Do you want to label speakers in the transcript?", default='y')
+    do_refine_notes = ask_yes_no("Do you want to refine the notes?", default='n')
+
     preprocess_cmd = [
         "python", "01-preprocess.py",
         "-i", video_path,
@@ -168,7 +171,8 @@ def main():
 
     if not execute_command(
         ["python", "03-transcribe.py",
-         "-i", audio_path,
+         "-a", audio_path,
+         "-s", slides_dir,
          "-o", transcript_dir,
          "-f", "json"],
         "Transcribing audio"
@@ -189,14 +193,47 @@ def main():
     ):
         return
 
-    # Step 5: Refine notes
-    if not execute_command(
-        ["python", "05-refine-notes.py",
-         "-i", notes_path,
-         "-o", output_dir],
-        "Refining notes"
-    ):
-        return
+    # Step 5: Label speakers (optional)
+    notes_for_refinement = notes_path  # Default to original notes
+    
+    if do_label_speakers:
+        print(f"\nStarting speaker labeling web interface...")
+        print(f"Audio file: {audio_path}")
+        print(f"Transcript file: {notes_path}")
+        print(f"The web browser will open automatically at http://localhost:5006")
+        print(f"Label each speaker by listening to audio clips and entering names")
+        print(f"Leave speaker names blank to keep original IDs (e.g., SPEAKER_01)")
+        print(f"Use the 'Close Application' button when finished, or press Ctrl+C here")
+        
+        try:
+            if not execute_command(
+                ["python", "05-label-speakers.py",
+                 "-a", audio_path,
+                 "-t", notes_path],
+                "Speaker labeling (web interface)"
+            ):
+                print("Speaker labeling was interrupted or failed, but continuing...")
+            else:
+                # If speaker labeling succeeded, use the labeled notes for refinement
+                speaker_labeled_notes = notes_path.replace(".md", "_with_speakernames.md")
+                if os.path.exists(speaker_labeled_notes):
+                    notes_for_refinement = speaker_labeled_notes
+                    print(f"Speaker labeling completed. Will refine notes with speaker names.")
+                else:
+                    print(f"Speaker labeled file not found, will refine original notes.")
+        except KeyboardInterrupt:
+            print("\nSpeaker labeling interrupted by user.")
+
+    # Step 6: Refine notes
+    if do_refine_notes:
+        print(f"\nRefining notes from: {notes_for_refinement}")
+        if not execute_command(
+            ["python", "06-refine-notes.py",
+            "-i", notes_for_refinement,
+            "-o", output_dir],
+            "Refining notes"
+        ):
+            return
 
     print("\n=== Workflow completed successfully! ===")
     print(f"Final output directory: {output_dir}")

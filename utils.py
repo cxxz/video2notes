@@ -81,6 +81,10 @@ def initialize_client(llm):
     elif llm.startswith("openai/"):
         api_key = os.getenv("V2N_API_KEY", "random")
         base_url = os.getenv("V2N_API_BASE", "https://api.openai.com/v1")
+        if base_url == "https://api.openai.com/v1":
+            assert api_key.startswith("sk-"), "V2N_API_KEY must start with sk-"
+        else:
+            print(f"Using custom LLM endpoint: {base_url}")
         client = OpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -93,7 +97,12 @@ def get_llm_response(client, llm, prompt):
     """Gets LLM response using the client and returns the result."""
     try:
         if llm.startswith("bedrock/"):
-            model_id = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+            if "claude-4-sonnet" in llm:
+                model_id = "us.anthropic.claude-sonnet-4-20250514-v1:0"
+            elif "claude-3-7-sonnet" in llm:
+                model_id = "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+            else:
+                raise ValueError(f"Unknown model: {llm}")
             completion = client.messages.create(
                 model=model_id,
                 messages=[

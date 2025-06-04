@@ -2,6 +2,8 @@ import os
 import re
 import io
 import argparse
+import webbrowser
+import threading
 from flask import Flask, request, render_template_string, redirect, url_for, send_file, abort
 from pydub import AudioSegment
 
@@ -116,7 +118,8 @@ def load_transcript(transcript_path):
 def update_transcript():
     """
     Replace each speaker header in the transcript with the user-provided speaker name.
-    For example, **SPEAKER_09 [00:02.692]:** becomes **Alice [00:02.692]:**
+    For example, **SPEAKER_09 [00:02.692]:** becomes **Speaker - Alice [00:02.692]:** when labeled as "Alice"
+    or stays **SPEAKER_09 [00:02.692]:** when no custom label is provided.
     """
     global transcript_content, speaker_mapping
     updated_content = transcript_content
@@ -125,9 +128,16 @@ def update_transcript():
     def replace_func(match):
         spk = match.group(1)
         rest = match.group(2)
-        # Replace with the provided label if available, else leave unchanged.
         label = speaker_mapping.get(spk, spk)
-        return f'**{label}{rest}**'
+        
+        # If the label is different from the original speaker ID, format as "Speaker - Name"
+        if label != spk:
+            formatted_label = f"Speaker - {label}"
+        else:
+            # Keep original format if no custom name was provided
+            formatted_label = label
+            
+        return f'**{formatted_label}{rest}**'
     updated_content = pattern.sub(replace_func, updated_content)
     return updated_content
 
@@ -148,26 +158,40 @@ def index():
     <html>
     <head>
         <title>Speaker Labeling</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 40px; }
+            .container { max-width: 600px; margin: 0 auto; }
+            audio { width: 100%; margin: 20px 0; }
+            input[type="text"] { width: 300px; padding: 10px; margin: 10px 0; }
+            input[type="submit"] { padding: 10px 20px; background-color: #007cba; color: white; border: none; cursor: pointer; }
+            input[type="submit"]:hover { background-color: #005a87; }
+            .info { background-color: #f0f8ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        </style>
     </head>
     <body>
-        <h2>Label Speaker</h2>
-        <p><strong>Speaker ID:</strong> {{ speaker_id }}</p>
-        <p>
-            <audio controls>
-                <source src="{{ url_for('play_audio', speaker_id=speaker_id) }}" type="audio/wav">
-                Your browser does not support the audio element.
-            </audio>
-        </p>
-        <form action="{{ url_for('label') }}" method="post">
-            <input type="hidden" name="speaker_id" value="{{ speaker_id }}">
-            <label for="label">Enter Speaker Name:</label>
-            <input type="text" id="label" name="label" required>
-            <input type="submit" value="Submit">
-        </form>
+        <div class="container">
+            <h2>Label Speaker ({{ current_index + 1 }} of {{ total_speakers }})</h2>
+            <div class="info">
+                <p><strong>Current Speaker ID:</strong> {{ speaker_id }}</p>
+                <p><strong>Instructions:</strong> Listen to the audio clip and enter a name for this speaker. Leave blank to keep the original speaker ID.</p>
+            </div>
+            <p>
+                <audio controls autoplay>
+                    <source src="{{ url_for('play_audio', speaker_id=speaker_id) }}" type="audio/wav">
+                    Your browser does not support the audio element.
+                </audio>
+            </p>
+            <form action="{{ url_for('label') }}" method="post">
+                <input type="hidden" name="speaker_id" value="{{ speaker_id }}">
+                <label for="label">Enter Speaker Name (optional):</label><br>
+                <input type="text" id="label" name="label" placeholder="e.g., John, Alice, or leave blank for {{ speaker_id }}">
+                <input type="submit" value="Submit">
+            </form>
+        </div>
     </body>
     </html>
     '''
-    return render_template_string(html, speaker_id=current_speaker)
+    return render_template_string(html, speaker_id=current_speaker, current_index=current_index, total_speakers=len(speaker_ids))
 
 @app.route("/play/<speaker_id>")
 def play_audio(speaker_id):
@@ -194,12 +218,18 @@ def play_audio(speaker_id):
 def label():
     """
     Receives the speaker name from the form, updates the mapping, and moves on to the next speaker.
+    If no name is provided, defaults to the original speaker ID.
     """
     global current_index
     speaker_id = request.form.get("speaker_id")
-    label_text = request.form.get("label")
-    if not speaker_id or not label_text:
-        abort(400, description="Missing speaker_id or label")
+    label_text = request.form.get("label", "").strip()
+    if not speaker_id:
+        abort(400, description="Missing speaker_id")
+    
+    # If no label provided, use the original speaker ID
+    if not label_text:
+        label_text = speaker_id
+    
     speaker_mapping[speaker_id] = label_text
     current_index += 1
     return redirect(url_for('index'))
@@ -220,11 +250,46 @@ def result():
     <html>
     <head>
         <title>Labeling Complete</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 40px; }
+            .container { max-width: 600px; margin: 0 auto; text-align: center; }
+            .success { background-color: #d4edda; padding: 20px; border-radius: 5px; margin: 20px 0; border: 1px solid #c3e6cb; }
+            .button { display: inline-block; padding: 10px 20px; margin: 10px; text-decoration: none; border-radius: 5px; }
+            .download-btn { background-color: #28a745; color: white; }
+            .download-btn:hover { background-color: #218838; }
+            .close-btn { background-color: #dc3545; color: white; }
+            .close-btn:hover { background-color: #c82333; }
+        </style>
     </head>
     <body>
-        <h2>All speakers have been labeled!</h2>
-        <p>The updated transcript has been saved as <strong>{{ output_filename }}</strong>.</p>
-        <p><a href="{{ url_for('download_transcript') }}">Download Updated Transcript</a></p>
+        <div class="container">
+            <h2>🎉 All speakers have been labeled!</h2>
+            <div class="success">
+                <p>The updated transcript has been saved as <strong>{{ output_filename }}</strong>.</p>
+                <p>You can now download the file or close the application.</p>
+            </div>
+            <p>
+                <a href="{{ url_for('download_transcript') }}" class="button download-btn">📥 Download Updated Transcript</a>
+            </p>
+            <p>
+                <button onclick="closeApp()" class="button close-btn">🔴 Close Application</button>
+            </p>
+        </div>
+        <script>
+            function closeApp() {
+                if (confirm('Are you sure you want to close the speaker labeling application?')) {
+                    fetch('/shutdown', {method: 'POST'})
+                        .then(() => {
+                            alert('Application closed successfully! You can now close this browser window.');
+                            window.close();
+                        })
+                        .catch(() => {
+                            alert('Application closed successfully! You can now close this browser window.');
+                            window.close();
+                        });
+                }
+            }
+        </script>
     </body>
     </html>
     '''
@@ -240,6 +305,16 @@ def download_transcript():
                          download_name=os.path.basename(output_transcript_path), mimetype="text/markdown")
     except Exception as e:
         abort(500, description="Error sending updated transcript file: " + str(e))
+
+@app.route("/shutdown", methods=["POST"])
+def shutdown():
+    """
+    Shuts down the Flask application.
+    """
+    import signal
+    import os
+    os.kill(os.getpid(), signal.SIGINT)
+    return "Application shutting down..."
 
 def initialize(audio_path, transcript_path):
     """
@@ -264,11 +339,29 @@ def initialize(audio_path, transcript_path):
     # Set the output transcript path based on the input transcript path
     output_transcript_path = transcript_path.replace(".md", "_with_speakernames.md")
 
+def open_browser():
+    """
+    Open the web browser after a short delay to ensure the server is running.
+    """
+    import time
+    time.sleep(1.5)  # Wait for the server to start
+    webbrowser.open('http://localhost:5006')
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Speaker Labeling Application")
     parser.add_argument("-a", "--audio_file", type=str, help="Path to the audio file", required=True)
     parser.add_argument("-t", "--transcript_path", type=str, help="Path to the transcript markdown file", required=True)
     args = parser.parse_args()
     initialize(args.audio_file, args.transcript_path)
+    
+    # Start browser in a separate thread
+    browser_thread = threading.Thread(target=open_browser)
+    browser_thread.daemon = True
+    browser_thread.start()
+    
+    print("Speaker labeling web interface starting...")
+    print("Opening browser automatically...")
+    print("If browser doesn't open, go to: http://localhost:5006")
+    
     # Start the Flask app. In production, consider using a production server.
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    app.run(host='0.0.0.0', port=5006, debug=False)

@@ -7,7 +7,7 @@ import shutil
 from utils import initialize_client, get_llm_response
 from flask import Flask, render_template_string, request, send_from_directory, url_for
 
-def extract_vocabulary(ocr_text, model_id='openai/gpt-4o-2024-05-13'):
+def extract_vocabulary(ocr_text, model_id='bedrock/claude-4-sonnet'):
     """
     Extract domain-specific vocabulary terms from the OCR transcript.
     """
@@ -139,6 +139,12 @@ def process_slides(selected_ids, slides, folder_path, archive=False):
     if archive and not os.path.exists(archive_folder):
         os.makedirs(archive_folder)
     
+    # Backup original slides.json to ori_slides.json
+    original_slides_path = os.path.join(folder_path, "slides.json")
+    backup_slides_path = os.path.join(folder_path, "ori_slides.json")
+    if os.path.exists(original_slides_path) and not os.path.exists(backup_slides_path):
+        shutil.copy2(original_slides_path, backup_slides_path)
+    
     for slide in slides:
         if slide["group_id"] in selected_ids:
             pruned.append({
@@ -211,8 +217,8 @@ def run_slide_selector(folder_path):
         return render_page("Slide Selection", "Slide Selection", content)
     
     def common_save_response(pruned, concatenated_texts, archive_message=""):
-        # Save pruned slides and concatenated OCR texts.
-        output_json = os.path.join(folder_path, "pruned_slides.json")
+        # Save pruned slides as the new slides.json (original backed up as ori_slides.json)
+        output_json = os.path.join(folder_path, "slides.json")
         with open(output_json, "w", encoding="utf-8") as f:
             json.dump(pruned, f, indent=4)
             
@@ -223,10 +229,12 @@ def run_slide_selector(folder_path):
             
         # Build the response page with options.
         archive_html = f"<p>{archive_message}</p>" if archive_message else ""
+        backup_message = "<p>Original slides backed up as: <strong>ori_slides.json</strong></p>"
         content = f"""
         <h2>Selection Saved</h2>
         {archive_html}
-        <p>Selected slides saved to: <strong>{output_json}</strong></p>
+        {backup_message}
+        <p>Selected slides saved as new: <strong>{output_json}</strong></p>
         <p>OCR text saved to: <strong>{output_txt}</strong></p>
         
         <!-- Separate rows for each action -->
@@ -237,8 +245,8 @@ def run_slide_selector(folder_path):
           <form action="/extract-vocabulary" method="post">
             <input type="hidden" name="ocr_text_file" value="{output_txt}">
             <select name="model_id" class="select-model">
-              <option value="openai/gpt-4o-2024-05-13">openai/gpt-4o</option>
-              <option value="bedrock/claude-3.7">bedrock/claude-3.7</option>
+              <option value="bedrock/claude-4-sonnet">claude-4-sonnet</option>
+              <option value="openai/gpt-4o-2024-08-06">gpt-4o</option>
             </select>
             <button type="submit" class="btn">Extract Vocabulary</button>
           </form>
@@ -324,13 +332,13 @@ def run_slide_selector(folder_path):
         return send_from_directory(folder_path, filename)
     
     def open_browser():
-        webbrowser.open_new("http://127.0.0.1:5000")
+        webbrowser.open_new("http://127.0.0.1:5002")
     
     threading.Timer(1.0, open_browser).start()
     
     # Run Flask server in a separate thread.
     from werkzeug.serving import make_server
-    server = make_server('127.0.0.1', 5000, app)
+    server = make_server('127.0.0.1', 5002, app)
     server_thread = threading.Thread(target=server.serve_forever)
     server_thread.daemon = True
     server_thread.start()

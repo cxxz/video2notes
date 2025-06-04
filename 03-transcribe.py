@@ -27,7 +27,7 @@ else:
 WHISPERX_ARGS = {"max_line_width": None, "max_line_count": None, "highlight_words": False}
 SUPPORTED_FORMATS = {"srt", "vtt", "json"}
 
-def load_whisper_model(model_id, device):
+def load_whisper_model(model_id, device, vocab=None):
     """Load the Whisper model based on the provided model_id."""
     if re.match(r'^[\w\-]+\/[\w\-]+$', model_id):  # Check if model_id is in <repo_id>/<model_name> format
         if HF_TOKEN is None or not HF_TOKEN.startswith("hf_"):
@@ -36,7 +36,17 @@ def load_whisper_model(model_id, device):
     else:
         logging.info(f"Loading local model from {model_id}")
 
-    return whisperx.load_model(model_id, device, compute_type=WHISPERX_DTYPE)
+    if vocab:
+        init_prompt = f"Terms and abbreviations used in this transcription include: {vocab}"
+        logging.info(f"Initial prompt for transcription:\n{vocab}")
+        whisper_model = whisperx.load_model(model_id,
+                                            device,
+                                            compute_type=WHISPERX_DTYPE,
+                                            asr_options={"initial_prompt": init_prompt})
+    else:
+        whisper_model = whisperx.load_model(model_id, device, compute_type=WHISPERX_DTYPE)
+
+    return whisper_model
 
 def save_transcription(result, save_dir, filename, output_format, whisperx_args):
     """Helper function to write transcription to a file."""
@@ -94,7 +104,8 @@ def transcribe_audio(audio_file, save_dir, save_format, model, device):
 def parse_arguments():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Transcribe audio files with WhisperX.")
-    parser.add_argument("-i", "--audio_path", required=True, help="Path to the input audio file")
+    parser.add_argument("-a", "--audio_path", required=True, help="Path to the input audio file")
+    parser.add_argument("-s", "--slides_dir", required=False, help="Path to the slides directory")
     parser.add_argument("-o", "--output", default=".", help="Output directory to save transcriptions")
     parser.add_argument("-f", "--format", choices=["srt", "vtt", "json"], default="json", help="Output format (srt, vtt, json)")
     parser.add_argument("-m", "--model_id", default="large-v3", help="Whisper model ID or local path")
@@ -103,5 +114,19 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    whisper_model = load_whisper_model(args.model_id, WHISPERX_DEVICE)
+    slides_dir = args.slides_dir
+    vocab = None
+    if slides_dir is not None:
+        vacab_path = os.path.join(slides_dir, "vocabulary.txt")
+        if os.path.exists(vacab_path):
+            with open(vacab_path, "r") as f:
+                vocab = f.read()
+    
+    if vocab:
+            logging.info(f"Vocabulary loaded from {vacab_path}.")
+            logging.info(f"Vocabulary: {vocab}")
+            whisper_model = load_whisper_model(args.model_id, WHISPERX_DEVICE, vocab)
+    else:
+        whisper_model = load_whisper_model(args.model_id, WHISPERX_DEVICE)
+    
     transcribe_audio(args.audio_path, args.output, args.format, whisper_model, WHISPERX_DEVICE)
