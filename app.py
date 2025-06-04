@@ -108,6 +108,18 @@ def is_safe_path(path):
     except Exception:
         return False
 
+def check_service_availability(host, port, timeout=5):
+    """Check if a service is available on the given host and port"""
+    import socket
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        result = sock.connect_ex((host, port))
+        sock.close()
+        return result == 0
+    except Exception:
+        return False
+
 def get_file_info(file_path):
     """Get file information for display"""
     try:
@@ -195,6 +207,40 @@ def execute_command(command, description):
         log_message(f"❌ Error executing {description}: {str(e)}")
         return False
 
+def execute_command_with_env(command, description, env):
+    """Execute a command with environment variables and capture output in real-time"""
+    log_message(f"Starting: {description}")
+    log_message(f"Command: {' '.join(command)}")
+    
+    try:
+        process = subprocess.Popen(
+            command, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.STDOUT, 
+            text=True,
+            universal_newlines=True,
+            env=env
+        )
+        
+        # Read output line by line
+        for line in process.stdout:
+            line = line.strip()
+            if line:
+                log_message(line)
+        
+        return_code = process.wait()
+        
+        if return_code == 0:
+            log_message(f"✅ {description} completed successfully")
+            return True
+        else:
+            log_message(f"❌ {description} failed with return code {return_code}")
+            return False
+            
+    except Exception as e:
+        log_message(f"❌ Error executing {description}: {str(e)}")
+        return False
+
 def run_workflow():
     """Execute the complete video2notes workflow"""
     try:
@@ -257,13 +303,19 @@ def run_workflow():
         workflow_state['slides_dir'] = slides_dir
         os.makedirs(slides_dir, exist_ok=True)
         
-        if not execute_command(
+        # Set environment variables for slide selector host/port
+        env = os.environ.copy()
+        env['SLIDE_SELECTOR_HOST'] = '0.0.0.0'  # Bind to all interfaces for remote access
+        env['SLIDE_SELECTOR_PORT'] = str(SLIDE_SELECTOR_PORT)
+        
+        if not execute_command_with_env(
             ["python", "02-extract-slides.py", 
              "-i", video_path,
              "-j", rois_path,
              "-o", slides_dir,
              "--select"],
-            "Extracting slides"
+            "Extracting slides",
+            env
         ):
             raise Exception("Slide extraction failed")
         
@@ -272,6 +324,23 @@ def run_workflow():
         workflow_state['interactive_ready'] = True
         log_message("🖱️ Slide selection interface is ready")
         log_message("Please use the 'Open Slide Selector' button to select slides")
+        
+        # Check if slide selector is actually accessible
+        slide_selector_host = 'localhost' if LOCAL_SERVER == 'true' else '0.0.0.0'
+        max_wait_time = 30  # Wait up to 30 seconds for service to be ready
+        wait_time = 0
+        
+        while wait_time < max_wait_time:
+            if check_service_availability('localhost', int(SLIDE_SELECTOR_PORT)):
+                log_message(f"✅ Slide selector is accessible on port {SLIDE_SELECTOR_PORT}")
+                break
+            else:
+                log_message(f"⏳ Waiting for slide selector to be ready on port {SLIDE_SELECTOR_PORT}...")
+                time.sleep(2)
+                wait_time += 2
+        else:
+            log_message(f"⚠️ Slide selector may not be accessible on port {SLIDE_SELECTOR_PORT}")
+            log_message(f"🔧 Try manually accessing http://localhost:{SLIDE_SELECTOR_PORT} or http://your-server-ip:{SLIDE_SELECTOR_PORT}")
         
         # Wait for slides to be selected (check for slides.json)
         slides_json = os.path.join(slides_dir, "slides.json")
@@ -333,17 +402,39 @@ def run_workflow():
             log_message("🎤 Speaker labeling interface is ready")
             log_message("Please use the 'Open Speaker Labeler' button to label speakers")
             
+            # Set environment variables for speaker labeler host/port
+            env = os.environ.copy()
+            env['SPEAKER_LABELER_HOST'] = '0.0.0.0'  # Bind to all interfaces for remote access
+            env['SPEAKER_LABELER_PORT'] = str(SPEAKER_LABELER_PORT)
+            
             # Start speaker labeling in background
             speaker_thread = threading.Thread(
-                target=lambda: execute_command(
+                target=lambda: execute_command_with_env(
                     ["python", "05-label-speakers.py",
                      "-a", audio_path,
                      "-t", notes_path],
-                    "Speaker labeling (web interface)"
+                    "Speaker labeling (web interface)",
+                    env
                 )
             )
             speaker_thread.daemon = True
             speaker_thread.start()
+            
+            # Check if speaker labeler is actually accessible
+            max_wait_time = 30  # Wait up to 30 seconds for service to be ready
+            wait_time = 0
+            
+            while wait_time < max_wait_time:
+                if check_service_availability('localhost', int(SPEAKER_LABELER_PORT)):
+                    log_message(f"✅ Speaker labeler is accessible on port {SPEAKER_LABELER_PORT}")
+                    break
+                else:
+                    log_message(f"⏳ Waiting for speaker labeler to be ready on port {SPEAKER_LABELER_PORT}...")
+                    time.sleep(2)
+                    wait_time += 2
+            else:
+                log_message(f"⚠️ Speaker labeler may not be accessible on port {SPEAKER_LABELER_PORT}")
+                log_message(f"🔧 Try manually accessing http://localhost:{SPEAKER_LABELER_PORT} or http://your-server-ip:{SPEAKER_LABELER_PORT}")
             
             # Wait for speaker labeling to complete
             speaker_labeled_notes = notes_path.replace(".md", "_with_speakernames.md")
@@ -665,6 +756,27 @@ def debug():
             'last_3_logs': workflow_state['logs'][-3:] if workflow_state['logs'] else [],
             'thread_alive': workflow_state['workflow_thread'].is_alive() if workflow_state['workflow_thread'] else None
         }
+    })
+
+@app.route('/debug/services')
+def debug_services():
+    """Debug endpoint to check service availability"""
+    services = {
+        'slide_selector': {
+            'port': SLIDE_SELECTOR_PORT,
+            'accessible': check_service_availability('localhost', int(SLIDE_SELECTOR_PORT))
+        },
+        'speaker_labeler': {
+            'port': SPEAKER_LABELER_PORT,
+            'accessible': check_service_availability('localhost', int(SPEAKER_LABELER_PORT))
+        }
+    }
+    
+    return jsonify({
+        'services': services,
+        'local_server_mode': LOCAL_SERVER,
+        'workflow_interactive_stage': workflow_state.get('interactive_stage'),
+        'workflow_interactive_ready': workflow_state.get('interactive_ready')
     })
 
 @app.route('/debug_form', methods=['POST'])
