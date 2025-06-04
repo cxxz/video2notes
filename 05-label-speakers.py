@@ -6,6 +6,11 @@ import webbrowser
 import threading
 from flask import Flask, request, render_template_string, redirect, url_for, send_file, abort
 from pydub import AudioSegment
+from dotenv import load_dotenv
+load_dotenv()
+
+SPEAKER_LABELER_PORT = os.getenv('SPEAKER_LABELER_PORT', 5006)
+LOCAL_SERVER = os.getenv('LOCAL_SERVER', 'false')
 
 app = Flask(__name__)
 
@@ -345,7 +350,7 @@ def open_browser():
     """
     import time
     time.sleep(1.5)  # Wait for the server to start
-    webbrowser.open('http://localhost:5006')
+    webbrowser.open(f'http://localhost:{SPEAKER_LABELER_PORT}')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Speaker Labeling Application")
@@ -355,13 +360,14 @@ if __name__ == '__main__':
     initialize(args.audio_file, args.transcript_path)
     
     # Start browser in a separate thread
-    browser_thread = threading.Thread(target=open_browser)
-    browser_thread.daemon = True
-    browser_thread.start()
+    if LOCAL_SERVER == 'true':
+        browser_thread = threading.Thread(target=open_browser)
+        browser_thread.daemon = True
+        browser_thread.start()
     
     print("Speaker labeling web interface starting...")
     print("Opening browser automatically...")
-    print("If browser doesn't open, go to: http://localhost:5006")
+    print(f"If browser doesn't open, go to: http://localhost:{SPEAKER_LABELER_PORT}")
     
     # Start the Flask app. In production, consider using a production server.
-    app.run(host='0.0.0.0', port=5006, debug=False)
+    app.run(host='0.0.0.0', port=SPEAKER_LABELER_PORT, debug=False)

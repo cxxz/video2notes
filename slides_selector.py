@@ -6,6 +6,11 @@ import webbrowser
 import shutil
 from utils import initialize_client, get_llm_response
 from flask import Flask, render_template_string, request, send_from_directory, url_for
+from dotenv import load_dotenv
+load_dotenv()
+
+SLIDE_SELECTOR_PORT = os.getenv('SLIDE_SELECTOR_PORT', 5002)
+LOCAL_SERVER = os.getenv('LOCAL_SERVER', 'false')
 
 def extract_vocabulary(ocr_text, model_id='bedrock/claude-4-sonnet'):
     """
@@ -332,13 +337,14 @@ def run_slide_selector(folder_path):
         return send_from_directory(folder_path, filename)
     
     def open_browser():
-        webbrowser.open_new("http://127.0.0.1:5002")
+        webbrowser.open_new(f"http://127.0.0.1:{SLIDE_SELECTOR_PORT}")
     
-    threading.Timer(1.0, open_browser).start()
+    if LOCAL_SERVER == 'true':
+        threading.Timer(1.0, open_browser).start()
     
     # Run Flask server in a separate thread.
     from werkzeug.serving import make_server
-    server = make_server('127.0.0.1', 5002, app)
+    server = make_server('0.0.0.0', SLIDE_SELECTOR_PORT, app)
     server_thread = threading.Thread(target=server.serve_forever)
     server_thread.daemon = True
     server_thread.start()
