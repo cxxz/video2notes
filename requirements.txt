@@ -6,6 +6,7 @@ pytesseract
 scrubadub_spacy
 pydub
 openai
+whisperx
 Flask>=2.3.3
 Werkzeug>=2.3.7
 anthropic[bedrock]
