@@ -659,6 +659,9 @@ def progress_stream():
             last_log_count = len(workflow_state['logs'])
             
             if workflow_state['status'] in ['completed', 'error', 'stopped']:
+                # Send one final update after a short delay to ensure frontend receives it
+                time.sleep(0.5)
+                yield f"data: {json.dumps(data)}\n\n"
                 break
                 
             time.sleep(1)
@@ -702,10 +705,17 @@ def status():
     # Add available files for download when workflow is completed
     if workflow_state['status'] == 'completed' and workflow_state['output_dir']:
         available_files = []
+        # Only log detailed debug info on first completion check
+        if not hasattr(workflow_state, '_debug_logged'):
+            app.logger.info(f"DEBUG: Checking available files. Status: {workflow_state['status']}, Output dir: {workflow_state['output_dir']}")
+            app.logger.info(f"DEBUG: Notes path: {workflow_state.get('notes_path')}, exists: {os.path.exists(workflow_state.get('notes_path', '')) if workflow_state.get('notes_path') else 'N/A'}")
+            workflow_state['_debug_logged'] = True
         
         # Notes file
         if workflow_state.get('notes_path'):
             notes_filename = os.path.basename(workflow_state['notes_path'])
+            if not workflow_state.get('_debug_logged'):
+                app.logger.info(f"DEBUG: Checking notes file - path: {workflow_state['notes_path']}, exists: {os.path.exists(workflow_state['notes_path'])}")
             if os.path.exists(workflow_state['notes_path']):
                 available_files.append({
                     'name': 'Notes',
@@ -713,6 +723,11 @@ def status():
                     'icon': '📄',
                     'description': 'Generated notes from video'
                 })
+                if not workflow_state.get('_debug_logged'):
+                    app.logger.info(f"DEBUG: Added notes file to available_files: {notes_filename}")
+            else:
+                if not workflow_state.get('_debug_logged'):
+                    app.logger.info(f"DEBUG: Notes file not found at: {workflow_state['notes_path']}")
         
         # Speaker-labeled notes (if exists)
         if workflow_state.get('notes_path'):
@@ -724,6 +739,21 @@ def status():
                     'filename': speaker_notes_filename,
                     'icon': '🎤',
                     'description': 'Notes with labeled speakers'
+                })
+        
+        # Refined notes (if exists)
+        if workflow_state.get('video_name') and workflow_state['parameters'].get('do_refine_notes'):
+            refined_notes_path = os.path.join(workflow_state['output_dir'], f"refined_{workflow_state['video_name']}_notes_with_speakernames.md")
+            if not os.path.exists(refined_notes_path):
+                 refined_notes_path = os.path.join(workflow_state['output_dir'], f"refined_{workflow_state['video_name']}_notes.md")
+            
+            refined_notes_filename = os.path.basename(refined_notes_path)
+            if os.path.exists(refined_notes_path):
+                available_files.append({
+                    'name': 'Refined Notes',
+                    'filename': refined_notes_filename,
+                    'icon': '✨',
+                    'description': 'Notes refined by LLM for clarity'
                 })
         
         # Transcript JSON
@@ -761,6 +791,8 @@ def status():
                 })
         
         status_data['available_files'] = available_files
+        if not workflow_state.get('_debug_logged'):
+            app.logger.info(f"DEBUG: Final available_files list has {len(available_files)} items: {[f['name'] for f in available_files]}")
     
     return jsonify(status_data)
 

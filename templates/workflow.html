@@ -497,9 +497,28 @@
             autoScroll = (container.scrollTop + container.clientHeight >= container.scrollHeight - 10);
         });
 
+        // Fallback check for completion in case SSE fails
+        function checkCompletionFallback() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'completed') {
+                        const completionSection = document.getElementById('completion-section');
+                        if (completionSection.classList.contains('hpe-hidden')) {
+                            console.log('Fallback: Detected completed workflow, showing completion section');
+                            showCompletionSection();
+                        }
+                    }
+                })
+                .catch(error => console.error('Fallback check error:', error));
+        }
+
         // Initialize when page loads
         window.addEventListener('load', function() {
             initializeEventSource();
+            
+            // Set up fallback check every 10 seconds (less frequent to reduce log noise)
+            setInterval(checkCompletionFallback, 10000);
         });
 
         // Clean up when page unloads
