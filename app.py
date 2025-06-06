@@ -3,6 +3,7 @@ import subprocess
 import threading
 import time
 import json
+import zipfile
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, Response, render_template_string, send_from_directory
 from werkzeug.utils import secure_filename
@@ -143,6 +144,40 @@ def get_file_info(file_path):
             'size_str': 'Unknown',
             'modified': 'Unknown'
         }
+
+def create_output_zip(output_dir):
+    """Create a ZIP file of the entire output directory"""
+    try:
+        # Create ZIP filename based on output directory name
+        output_basename = os.path.basename(output_dir)
+        zip_filename = f"{output_basename}.zip"
+        zip_path = os.path.join(output_dir, zip_filename)
+        
+        # Don't recreate if already exists and is recent
+        if os.path.exists(zip_path):
+            zip_age = time.time() - os.path.getmtime(zip_path)
+            if zip_age < 60:  # If ZIP is less than 1 minute old, reuse it
+                return zip_filename
+        
+        # Create the ZIP file
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(output_dir):
+                for file in files:
+                    # Skip the ZIP file itself
+                    if file == zip_filename:
+                        continue
+                    
+                    file_path = os.path.join(root, file)
+                    # Create relative path for inside the ZIP
+                    arcname = os.path.relpath(file_path, output_dir)
+                    zipf.write(file_path, arcname)
+        
+        app.logger.info(f"Created ZIP file: {zip_path}")
+        return zip_filename
+        
+    except Exception as e:
+        app.logger.error(f"Error creating ZIP file: {e}")
+        return None
 
 # Global variables for workflow state
 workflow_state = {
@@ -711,74 +746,53 @@ def status():
             app.logger.info(f"DEBUG: Notes path: {workflow_state.get('notes_path')}, exists: {os.path.exists(workflow_state.get('notes_path', '')) if workflow_state.get('notes_path') else 'N/A'}")
             workflow_state['_debug_logged'] = True
         
-        # Notes file
-        if workflow_state.get('notes_path'):
-            notes_filename = os.path.basename(workflow_state['notes_path'])
-            if not workflow_state.get('_debug_logged'):
-                app.logger.info(f"DEBUG: Checking notes file - path: {workflow_state['notes_path']}, exists: {os.path.exists(workflow_state['notes_path'])}")
-            if os.path.exists(workflow_state['notes_path']):
-                available_files.append({
-                    'name': 'Notes',
-                    'filename': notes_filename,
-                    'icon': '📄',
-                    'description': 'Generated notes from video'
-                })
-                if not workflow_state.get('_debug_logged'):
-                    app.logger.info(f"DEBUG: Added notes file to available_files: {notes_filename}")
-            else:
-                if not workflow_state.get('_debug_logged'):
-                    app.logger.info(f"DEBUG: Notes file not found at: {workflow_state['notes_path']}")
+        # Notes file - Only show the latest/most refined version
+        latest_notes = None
         
-        # Speaker-labeled notes (if exists)
-        if workflow_state.get('notes_path'):
-            speaker_notes_path = workflow_state['notes_path'].replace('.md', '_with_speakernames.md')
-            speaker_notes_filename = os.path.basename(speaker_notes_path)
-            if os.path.exists(speaker_notes_path):
-                available_files.append({
-                    'name': 'Notes with Speaker Names',
-                    'filename': speaker_notes_filename,
-                    'icon': '🎤',
-                    'description': 'Notes with labeled speakers'
-                })
-        
-        # Refined notes (if exists)
+        # Check for refined notes first (highest priority)
         if workflow_state.get('video_name') and workflow_state['parameters'].get('do_refine_notes'):
             refined_notes_path = os.path.join(workflow_state['output_dir'], f"refined_{workflow_state['video_name']}_notes_with_speakernames.md")
             if not os.path.exists(refined_notes_path):
-                 refined_notes_path = os.path.join(workflow_state['output_dir'], f"refined_{workflow_state['video_name']}_notes.md")
+                refined_notes_path = os.path.join(workflow_state['output_dir'], f"refined_{workflow_state['video_name']}_notes.md")
             
-            refined_notes_filename = os.path.basename(refined_notes_path)
             if os.path.exists(refined_notes_path):
-                available_files.append({
-                    'name': 'Refined Notes',
-                    'filename': refined_notes_filename,
+                latest_notes = {
+                    'name': 'Notes (Refined)',
+                    'filename': os.path.basename(refined_notes_path),
                     'icon': '✨',
-                    'description': 'Notes refined by LLM for clarity'
-                })
+                    'description': 'Final notes refined by LLM for clarity'
+                }
         
-        # Transcript JSON
-        if workflow_state.get('video_name'):
-            transcript_path = os.path.join(workflow_state['output_dir'], 'transcript', f"{workflow_state['video_name']}.json")
-            if os.path.exists(transcript_path):
-                # For download, we need relative path from output_dir
-                available_files.append({
-                    'name': 'Transcript JSON',
-                    'filename': f"transcript/{workflow_state['video_name']}.json",
-                    'icon': '📝',
-                    'description': 'Detailed transcript with timestamps'
-                })
+        # If no refined notes, check for speaker-labeled notes (second priority)
+        if not latest_notes and workflow_state.get('notes_path'):
+            speaker_notes_path = workflow_state['notes_path'].replace('.md', '_with_speakernames.md')
+            if os.path.exists(speaker_notes_path):
+                latest_notes = {
+                    'name': 'Notes (with Speaker Names)',
+                    'filename': os.path.basename(speaker_notes_path),
+                    'icon': '🎤',
+                    'description': 'Notes with labeled speakers'
+                }
         
-        # Audio file
-        if workflow_state.get('audio_path') and os.path.exists(workflow_state['audio_path']):
-            audio_filename = os.path.basename(workflow_state['audio_path'])
-            available_files.append({
-                'name': 'Extracted Audio',
-                'filename': audio_filename,
-                'icon': '🔊',
-                'description': 'Audio extracted from video'
-            })
+        # If no speaker-labeled notes, use original notes (lowest priority)
+        if not latest_notes and workflow_state.get('notes_path'):
+            if os.path.exists(workflow_state['notes_path']):
+                latest_notes = {
+                    'name': 'Notes',
+                    'filename': os.path.basename(workflow_state['notes_path']),
+                    'icon': '📄',
+                    'description': 'Generated notes from video'
+                }
         
-        # Slides directory (as ZIP if we want to compress it)
+        # Add the latest notes to available files
+        if latest_notes:
+            available_files.append(latest_notes)
+            if not workflow_state.get('_debug_logged'):
+                app.logger.info(f"DEBUG: Added latest notes file: {latest_notes['name']} - {latest_notes['filename']}")
+        elif not workflow_state.get('_debug_logged'):
+            app.logger.info(f"DEBUG: No notes file found")
+        
+                # Slides directory (as ZIP if we want to compress it)
         if workflow_state.get('slides_dir') and os.path.exists(workflow_state['slides_dir']):
             slides_json_path = os.path.join(workflow_state['slides_dir'], 'slides.json')
             if os.path.exists(slides_json_path):
@@ -789,6 +803,16 @@ def status():
                     'icon': '🖼️',
                     'description': 'Selected slides metadata'
                 })
+        
+        # ZIP file with all outputs
+        zip_filename = create_output_zip(workflow_state['output_dir'])
+        if zip_filename:
+            available_files.append({
+                'name': 'All Files (ZIP)',
+                'filename': zip_filename,
+                'icon': '📦',
+                'description': 'Complete output folder as ZIP archive'
+            })
         
         status_data['available_files'] = available_files
         if not workflow_state.get('_debug_logged'):
@@ -833,7 +857,12 @@ def download_file(filename):
         return jsonify({'error': 'File not found'}), 404
     
     app.logger.info(f"Downloading file: {file_path}")
-    return send_file(file_path, as_attachment=True)
+    
+    # Handle ZIP files with proper content type
+    if filename.lower().endswith('.zip'):
+        return send_file(file_path, as_attachment=True, mimetype='application/zip')
+    else:
+        return send_file(file_path, as_attachment=True)
 
 @app.route('/stop_workflow', methods=['POST'])
 def stop_workflow():
@@ -1229,13 +1258,12 @@ def extract_vocabulary_ajax():
         vocabulary = extract_vocabulary(all_text, model)
         
         # Write vocabulary to file
-        vocabulary_file = os.path.join(folder_path, "vocabulary.txt")
-        with open(vocabulary_file, 'w', encoding='utf-8') as f:
-            f.write(f"Vocabulary extracted from {len(selected_slides)} selected slides using {model}\n")
-            f.write("=" * 60 + "\n\n")
-            f.write(vocabulary)
+        if vocabulary is not None and len(vocabulary) > 0:
+            vocabulary_file = os.path.join(folder_path, "vocabulary.txt")
+            with open(vocabulary_file, 'w', encoding='utf-8') as f:
+                f.write(vocabulary)
         
-        success_message = f"Vocabulary saved to vocabulary.txt ({len(selected_slides)} slides, {model})"
+            success_message = f"Vocabulary saved to vocabulary.txt ({len(selected_slides)} slides, {model})"
         
         return jsonify({
             'success': True,
