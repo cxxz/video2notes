@@ -154,7 +154,7 @@ class WorkflowService:
         self.workflow_state.progress = 5
         
         return execute_command(
-            ["python", "split-video.py", video_path, timestamp_file],
+            ["python", "scripts/split-video.py", video_path, timestamp_file],
             "Splitting video",
             log_callback=self._log_message
         )
@@ -165,7 +165,7 @@ class WorkflowService:
         self.workflow_state.progress = 15
         
         preprocess_cmd = [
-            "python", "preprocess-video.py",
+            "python", "scripts/preprocess-video.py",
             "-i", video_path,
             "-o", output_dir
         ]
@@ -191,7 +191,7 @@ class WorkflowService:
         
         # Extract slides
         success = execute_command(
-            ["python", "extract-slides.py", 
+            ["python", "scripts/extract-slides.py", 
              "-i", video_path,
              "-j", rois_path,
              "-o", slides_dir],
@@ -260,7 +260,7 @@ class WorkflowService:
         os.makedirs(transcript_dir, exist_ok=True)
         
         transcript_command = [
-            "python", "transcribe-audio.py",
+            "python", "scripts/transcribe-audio.py",
             "-a", audio_path,
             "-s", slides_dir,
             "-o", transcript_dir,
@@ -288,7 +288,7 @@ class WorkflowService:
         notes_path = os.path.join(output_dir, f"{video_name}_notes.md")
         
         success = execute_command(
-            ["python", "generate-notes.py",
+            ["python", "scripts/generate-notes.py",
              "-t", transcript_json,
              "-s", slides_json,
              "-o", notes_path],
@@ -340,7 +340,7 @@ class WorkflowService:
         self.workflow_state.progress = 90
         
         refine_notes_command = [
-            "python", "refine-notes.py",
+            "python", "scripts/refine-notes.py",
             "-i", notes_path,
             "-o", output_dir
         ]

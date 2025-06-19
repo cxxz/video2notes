@@ -25,7 +25,7 @@ class SharePointService:
                 return {'success': False, 'error': 'SHAREPOINT_URL not configured'}
             
             # Import SharePoint downloader
-            from sharepoint_downloader import SharePointDownloader
+            from ..utils.sharepoint_downloader import SharePointDownloader
             
             downloader = SharePointDownloader(
                 sharepoint_url=sharepoint_url,

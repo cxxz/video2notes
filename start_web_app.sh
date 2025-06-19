@@ -27,8 +27,8 @@ fi
 REQUIRED_SCRIPTS=("preprocess-video.py" "extract-slides.py" "transcribe-audio.py" "generate-notes.py" "refine-notes.py")
 
 for script in "${REQUIRED_SCRIPTS[@]}"; do
-    if [ ! -f "$script" ]; then
-        echo "❌ Required script $script not found"
+    if [ ! -f "scripts/$script" ]; then
+        echo "❌ Required script $script not found in scripts/ directory"
         exit 1
     fi
 done
@@ -54,4 +54,4 @@ mkdir -p logs
 echo "🎬 Starting Video2Notes Web Application..."
 
 # Run the refactored Flask app
-python run_app.py 2>&1 | tee logs/app_$(date +%Y%m%d_%H%M%S).log 
+python run_app.py 2>&1 | tee logs/app_$(date +%Y%m%d_%H%M%S).log
