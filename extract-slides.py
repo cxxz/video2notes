@@ -1,3 +1,4 @@
+
 import cv2
 import os
 import imagehash
@@ -8,10 +9,17 @@ import argparse
 import json
 import pytesseract
 import sys
+import logging
 
 # Import slide selection functionality
 from utils import analyze_text_for_names
 from slides_selector import run_slide_selector
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 def crop_slide(frame, roi):
     if roi is None:
@@ -38,7 +46,7 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
     """Extract unique slides from the video and save them to the specified folder."""
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
-        print(f"Error: Cannot open video file {video_path}")
+        logging.error(f"Cannot open video file {video_path}")
         return []
 
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -109,7 +117,7 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
                         prev_group = slide['group_id']
                         prev_imagehash = slide['imagehash']
                         if abs(current_hash - prev_imagehash) <= similarity_threshold:
-                            print(f"Duplicate slide found: {prev_group} with current group {group_id}")
+                            logging.info(f"Duplicate slide found: {prev_group} with current group {group_id}")
                             add_new_slide = False
                             break
                     
@@ -117,7 +125,7 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
                         # Check if the slide contains mostly names
                         is_mostly_names, _, names = analyze_text_for_names(ocr_text)
                         if is_mostly_names:
-                            print(f"Slide {group_id} contains mostly names: {names} in ocr_text: {ocr_text}")
+                            logging.info(f"Slide {group_id} contains mostly names: {names} in ocr_text: {ocr_text}")
                             if len(names) > len(speaker_names):
                                 speaker_names = names
                                 names_text = ocr_text
@@ -129,7 +137,7 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
                     image_path = os.path.join(slides_folder, f'slide_{group_id}.png')
                     cv2.imwrite(slide_filepath, selected_slide)
                     h, m, s = seconds_to_hms(first_timestamp_of_group)
-                    print(f'slide_{group_id}.png starts at: {h:02d}:{m:02d}:{s:02d} with {len_ocr_text} characters')
+                    logging.info(f'slide_{group_id}.png starts at: {h:02d}:{m:02d}:{s:02d} with {len_ocr_text} characters')
 
                     unique_slides.append({
                         'group_id': group_id,
@@ -175,7 +183,7 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
             image_path = os.path.join(slides_folder, f'slide_{group_id}.png')
             cv2.imwrite(slide_filepath, selected_slide)
             h, m, s = seconds_to_hms(first_timestamp_of_group)
-            print(f'slide_{group_id}.png starts at: {h:02d}:{m:02d}:{s:02d} with {len_ocr_text} characters')
+            logging.info(f'slide_{group_id}.png starts at: {h:02d}:{m:02d}:{s:02d} with {len_ocr_text} characters')
 
             unique_slides.append({
                 'group_id': group_id,
@@ -191,7 +199,7 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
         slide['imagehash'] = str(slide['imagehash'])
 
     if len(speaker_names) > 0:
-        print(f"Speaker names detected: {speaker_names}")
+        logging.info(f"Speaker names detected: {speaker_names}")
         # save speaker names to a txt named speaker_names.txt
         speaker_names_file = os.path.join(save_folder, 'speaker_names.txt')
         with open(speaker_names_file, 'w') as f:
@@ -240,7 +248,7 @@ def main():
         save_folder = os.path.join(os.path.dirname(args.video_path), f'slides_{video_basename}_{timestamp}')
 
     os.makedirs(save_folder, exist_ok=True)
-    print(f'Saving slides to {save_folder}')
+    logging.info(f'Saving slides to {save_folder}')
 
     # Extract unique slides
     unique_slides = extract_unique_slides(
@@ -258,11 +266,11 @@ def main():
     json_file = os.path.join(save_folder, 'slides.json')
     with open(json_file, 'w') as f:
         json.dump(unique_slides, f, indent=4)
-    print(f'Saved slides to {json_file}')
+    logging.info(f'Saved slides to {json_file}')
     
     # Launch the slide selector web app if requested
     if args.select:
-        print("\nLaunching slide selector web app...")
+        logging.info("\nLaunching slide selector web app...")
         run_slide_selector(save_folder)
 
 if __name__ == '__main__':

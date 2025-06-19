@@ -1,6 +1,13 @@
 import json
 import os
 import argparse
+import logging
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 def load_json(file_path):
     """
@@ -67,7 +74,7 @@ def generate_markdown(transcript, screenshot_groups, output_path):
         
         # Check if the speaker has changed
         if 'speaker' not in entry:
-            print(f"Warning: No speaker found for entry at {entry}")
+            logging.warning(f"No speaker found for entry at {entry}")
             entry['speaker'] = "Unknown"
         
         if entry['speaker'] != current_speaker:
@@ -142,7 +149,7 @@ def main():
     # Generate Markdown
     generate_markdown(sorted_transcript, grouped_screenshots, args.output)
 
-    print(f"Markdown file '{args.output}' has been generated successfully.")
+    logging.info(f"Markdown file '{args.output}' has been generated successfully.")
 
 if __name__ == "__main__":
     main()

@@ -20,6 +20,9 @@ import re
 import io
 from pydub import AudioSegment
 
+# Import SharePoint downloader
+from sharepoint_downloader import SharePointDownloader
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'your-secret-key-here')
 app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER', '/tmp/video2notes_uploads')
@@ -219,6 +222,16 @@ speaker_labeler_state = {
     'active': False
 }
 
+# Global variables for SharePoint downloader
+sharepoint_state = {
+    'downloader': None,
+    'video_files': [],
+    'selected_file': None,
+    'downloading': False,
+    'download_progress': 0,
+    'active': False
+}
+
 def log_message(message):
     """Add a message to the workflow logs with timestamp"""
     timestamp = datetime.now().strftime("%H:%M:%S")
@@ -321,7 +334,7 @@ def run_workflow():
             workflow_state['progress'] = 5
             
             if not execute_command(
-                ["python", "00-split-video.py", video_path, params['timestamp_file']],
+                ["python", "split-video.py", video_path, params['timestamp_file']],
                 "Splitting video"
             ):
                 raise Exception("Video splitting failed")
@@ -331,7 +344,7 @@ def run_workflow():
         workflow_state['progress'] = 15
         
         preprocess_cmd = [
-            "python", "01-preprocess.py",
+            "python", "preprocess-video.py",
             "-i", video_path,
             "-o", output_dir
         ]
@@ -357,7 +370,7 @@ def run_workflow():
         
         # Extract slides without the --select flag (no separate Flask app)
         if not execute_command(
-            ["python", "02-extract-slides.py", 
+            ["python", "extract-slides.py", 
              "-i", video_path,
              "-j", rois_path,
              "-o", slides_dir],
@@ -398,12 +411,21 @@ def run_workflow():
         workflow_state['current_step'] = 'Transcribing audio'
         workflow_state['progress'] = 50
         
-        audio_path = os.path.join(output_dir, f"{video_name}.m4a")
+        # the audio can either be .m4a or .mp3, just check which file exists
+        audio_path_1 = os.path.join(output_dir, f"{video_name}.m4a")
+        audio_path_2 = os.path.join(output_dir, f"{video_name}.mp3")
+        if os.path.exists(audio_path_1):
+            audio_path = audio_path_1
+        elif os.path.exists(audio_path_2):
+            audio_path = audio_path_2
+        else:
+            raise Exception("No audio file found. Please ensure audio extraction was successful.")
+        
         workflow_state['audio_path'] = audio_path
         transcript_dir = os.path.join(output_dir, "transcript")
         os.makedirs(transcript_dir, exist_ok=True)
 
-        transcript_command = ["python", "03-transcribe.py",
+        transcript_command = ["python", "transcribe-audio.py",
              "-a", audio_path,
              "-s", slides_dir,
              "-o", transcript_dir,
@@ -432,7 +454,7 @@ def run_workflow():
         workflow_state['notes_path'] = notes_path
         
         if not execute_command(
-            ["python", "04-generate-notes.py",
+            ["python", "generate-notes.py",
              "-t", transcript_json,
              "-s", slides_json,
              "-o", notes_path],
@@ -477,7 +499,7 @@ def run_workflow():
             workflow_state['current_step'] = 'Refining notes'
             workflow_state['progress'] = 90
             
-            refine_notes_command = ["python", "06-refine-notes.py",
+            refine_notes_command = ["python", "refine-notes.py",
                  "-i", notes_for_refinement,
                  "-o", output_dir]
             
@@ -635,6 +657,21 @@ def start_workflow():
         except Exception as e:
             app.logger.error(f"Error finding uploaded file: {e}")
             return jsonify({'error': 'Error accessing uploaded file'}), 400
+    
+    # Handle SharePoint method - use the downloaded file
+    elif input_method == 'sharepoint' and not video_path:
+        if sharepoint_state.get('selected_file'):
+            # Find the downloaded file in the upload folder
+            filename = sharepoint_state['selected_file']['FileLeafRef']
+            video_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            if os.path.exists(video_path):
+                app.logger.info(f"Using SharePoint downloaded file: {video_path}")
+            else:
+                app.logger.error(f"Downloaded SharePoint file not found: {video_path}")
+                return jsonify({'error': 'Downloaded SharePoint file not found. Please download a video first.'}), 400
+        else:
+            app.logger.error("No SharePoint file selected")
+            return jsonify({'error': 'No SharePoint video file selected. Please select and download a video first.'}), 400
     
     params = {
         'video_path': video_path,
@@ -1003,6 +1040,117 @@ def upload_video():
         app.logger.error(f"Upload error: {str(e)}")
         return jsonify({'error': f'Upload failed: {str(e)}'}), 500
 
+# SharePoint Downloader Routes
+@app.route('/sharepoint/list_videos', methods=['GET'])
+def sharepoint_list_videos():
+    """Get list of video files from SharePoint"""
+    try:
+        # Initialize SharePoint downloader
+        download_dir = app.config['UPLOAD_FOLDER']
+        sharepoint_url = os.getenv('SHAREPOINT_URL', None)
+        if not sharepoint_url:
+            return jsonify({'error': 'SHAREPOINT_URL environment variable not set'}), 500
+        
+        downloader = SharePointDownloader(
+            sharepoint_url=sharepoint_url,
+            output_dir=download_dir
+        )
+
+        # Get video files from SharePoint
+        video_files = downloader.get_video_files()
+        
+        # Store in global state
+        sharepoint_state['downloader'] = downloader
+        sharepoint_state['video_files'] = video_files
+        sharepoint_state['active'] = True
+        
+        # Prepare simplified file list for frontend
+        file_list = []
+        for i, video_file in enumerate(video_files[:10]):  # Show max 10 files
+            file_info = {
+                'index': i,
+                'filename': video_file['FileLeafRef'],
+                'modified': video_file.get('Modified.', 'Unknown'),
+                'size': video_file.get('FileSizeDisplay', 'Unknown')
+            }
+            file_list.append(file_info)
+        
+        app.logger.info(f"Found {len(video_files)} SharePoint video files")
+        
+        return jsonify({
+            'success': True,
+            'files': file_list,
+            'total_count': len(video_files)
+        })
+        
+    except Exception as e:
+        app.logger.error(f"SharePoint list error: {str(e)}")
+        return jsonify({'error': f'Failed to list SharePoint videos: {str(e)}'}), 500
+
+@app.route('/sharepoint/download/<int:file_index>', methods=['POST'])
+def sharepoint_download_video(file_index):
+    """Download selected video file from SharePoint"""
+    try:
+        if not sharepoint_state.get('active') or not sharepoint_state.get('video_files'):
+            return jsonify({'error': 'SharePoint video list not loaded. Please list videos first.'}), 400
+        
+        video_files = sharepoint_state['video_files']
+        if file_index < 0 or file_index >= len(video_files):
+            return jsonify({'error': 'Invalid file index'}), 400
+        
+        selected_file = video_files[file_index]
+        downloader = sharepoint_state['downloader']
+        
+        if not downloader:
+            return jsonify({'error': 'SharePoint downloader not initialized'}), 400
+        
+        # Set downloading state
+        sharepoint_state['downloading'] = True
+        sharepoint_state['selected_file'] = selected_file
+        
+        filename = selected_file['FileLeafRef']
+        app.logger.info(f"Starting download of SharePoint file: {filename}")
+        
+        # Download the file
+        success = downloader.download_file(selected_file)
+        
+        sharepoint_state['downloading'] = False
+        
+        if success:
+            # Verify the file was downloaded
+            expected_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            if os.path.exists(expected_path):
+                file_size_mb = get_file_size_mb(expected_path)
+                app.logger.info(f"SharePoint video downloaded: {filename} ({file_size_mb:.1f} MB)")
+                
+                return jsonify({
+                    'success': True,
+                    'filename': filename,
+                    'file_path': expected_path,
+                    'size_mb': round(file_size_mb, 1)
+                })
+            else:
+                app.logger.error(f"Downloaded file not found at expected path: {expected_path}")
+                return jsonify({'error': 'Download completed but file not found'}), 500
+        else:
+            app.logger.error(f"Failed to download SharePoint file: {filename}")
+            return jsonify({'error': 'Download failed'}), 500
+            
+    except Exception as e:
+        sharepoint_state['downloading'] = False
+        app.logger.error(f"SharePoint download error: {str(e)}")
+        return jsonify({'error': f'Download failed: {str(e)}'}), 500
+
+@app.route('/sharepoint/status')
+def sharepoint_status():
+    """Get SharePoint downloader status"""
+    return jsonify({
+        'active': sharepoint_state.get('active', False),
+        'downloading': sharepoint_state.get('downloading', False),
+        'files_count': len(sharepoint_state.get('video_files', [])),
+        'selected_file': sharepoint_state.get('selected_file', {}).get('FileLeafRef') if sharepoint_state.get('selected_file') else None
+    })
+
 # Slide Selector Helper Functions
 def extract_vocabulary(ocr_text, model_id='bedrock/claude-4-sonnet'):
     """Extract domain-specific vocabulary terms from the OCR transcript."""
@@ -1100,214 +1248,9 @@ def process_slides(selected_ids, slides, folder_path):
     
     for slide in slides:
         if slide["group_id"] in selected_ids:
-            pruned.append({
-                "group_id": slide.get("group_id"),
-                "timestamp": slide.get("timestamp"),
-                "image_path": slide.get("image_path"),
-                "ocr_text": slide.get("ocr_text")
-            })
+            pruned.append(slide)
                 
     return pruned
-
-# Slide Selector Routes
-@app.route('/select-slides')
-def select_slides_index():
-    """Slide selector main page"""
-    if not slide_selector_state['active'] or not slide_selector_state['slides']:
-        return render_slide_page("Error", "Slide Selector", 
-                                '<div class="hpe-alert hpe-alert-danger"><p>Slide selector is not active or no slides available.</p></div>')
-    
-    slides = slide_selector_state['slides']
-    folder_path = slide_selector_state['folder_path']
-    
-    # Build HTML for each slide item
-    slides_html = []
-    for slide in slides:
-        image_url = url_for('slide_images', filename=slide["relative_path"])
-        slide_html = f"""
-        <div class="hpe-slide">
-            <img src="{image_url}" alt="Slide {slide['group_id']}" style="max-width: 600px;">
-            <div class="hpe-slide-checkbox">
-                <input type="checkbox" id="slide_{slide['group_id']}" name="slides" value="{slide['group_id']}" checked>
-                <label for="slide_{slide['group_id']}">Slide {slide['group_id']}</label>
-            </div>
-        </div>
-        """
-        slides_html.append(slide_html)
-    
-    # Form content
-    form_content = f"""
-    <div class="hpe-card">
-        <div class="hpe-card-header">
-            <h3 class="hpe-card-title">🖼️ Select Slides</h3>
-        </div>
-        <form action="{url_for('save_slide_selection')}" method="post">
-            {''.join(slides_html)}
-            <div class="hpe-mt-5">
-                <button type="submit" class="hpe-btn hpe-btn-primary hpe-btn-lg">💾 Save Selection</button>
-            </div>
-        </form>
-    </div>
-    
-    <div class="vocabulary-section">
-        <h3 class="hpe-card-title">🔤 Extract Vocabulary</h3>
-        <p class="hpe-mb-4">Extract domain-specific vocabulary from selected slides to improve transcription accuracy.</p>
-        
-        <div class="vocabulary-controls">
-            <label for="model" class="hpe-label">Model:</label>
-            <select id="model" class="hpe-select" style="max-width: 300px;">
-                <option value="openai/gpt-4o-2024-08-06">GPT-4o</option>
-                <option value="bedrock/claude-4-sonnet">Claude 4 Sonnet</option>
-            </select>
-            <button type="button" class="hpe-btn hpe-btn-secondary" onclick="extractVocabulary()">🔤 Extract Vocabulary</button>
-        </div>
-        
-        <div id="vocabulary-result" class="vocabulary-result hpe-hidden">
-            <h4 class="hpe-mb-3">📝 Extracted Vocabulary:</h4>
-            <div id="vocabulary-content" class="vocabulary-content"></div>
-            <div id="vocabulary-status" class="vocabulary-status"></div>
-        </div>
-    </div>
-    
-    <script>
-    function getSelectedSlides() {{
-        const checkboxes = document.querySelectorAll('input[name="slides"]:checked');
-        return Array.from(checkboxes).map(cb => cb.value);
-    }}
-    
-    function extractVocabulary() {{
-        const selectedSlides = getSelectedSlides();
-        const model = document.getElementById('model').value;
-        
-        if (selectedSlides.length === 0) {{
-            alert('Please select at least one slide before extracting vocabulary.');
-            return;
-        }}
-        
-        // Show loading state
-        const resultDiv = document.getElementById('vocabulary-result');
-        const contentDiv = document.getElementById('vocabulary-content');
-        const statusDiv = document.getElementById('vocabulary-status');
-        
-        resultDiv.classList.remove('hpe-hidden');
-        contentDiv.innerHTML = '<div class="hpe-spinner"></div> Extracting vocabulary...';
-        statusDiv.innerHTML = '';
-        
-        // Make AJAX request
-        fetch('{url_for('extract_vocabulary_ajax')}', {{
-            method: 'POST',
-            headers: {{
-                'Content-Type': 'application/json',
-            }},
-            body: JSON.stringify({{
-                model: model,
-                selected_slides: selectedSlides
-            }})
-        }})
-        .then(response => response.json())
-        .then(data => {{
-            if (data.success) {{
-                contentDiv.textContent = data.vocabulary;
-                statusDiv.innerHTML = '<span style="color: var(--hpe-success);">✅ ' + data.message + '</span>';
-            }} else {{
-                contentDiv.textContent = 'Error: ' + data.error;
-                statusDiv.innerHTML = '<span style="color: var(--hpe-danger);">❌ Failed to extract vocabulary</span>';
-            }}
-        }})
-        .catch(error => {{
-            contentDiv.textContent = 'Error: ' + error;
-            statusDiv.innerHTML = '<span style="color: var(--hpe-danger);">❌ Network error</span>';
-        }});
-    }}
-    </script>
-    """
-    
-    return render_slide_page("Slide Selector", "Video2Notes - Slide Selector", form_content)
-
-@app.route('/slide-images/<path:filename>')
-def slide_images(filename):
-    """Serve slide images"""
-    if not slide_selector_state['active']:
-        return "Slide selector not active", 404
-    return send_from_directory(slide_selector_state['folder_path'], filename)
-
-@app.route('/save-slide-selection', methods=['POST'])
-def save_slide_selection():
-    """Save selected slides"""
-    selected_ids = request.form.getlist('slides')
-    selected_ids = [int(id) for id in selected_ids]
-    
-    slides = slide_selector_state['slides']
-    folder_path = slide_selector_state['folder_path']
-    
-    pruned = process_slides(selected_ids, slides, folder_path)
-    
-    # Save pruned slides as the new slides.json
-    json_path = os.path.join(folder_path, "slides.json")
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(pruned, f, indent=4)
-    
-    # Deactivate slide selector
-    slide_selector_state['active'] = False
-    
-    success_content = f"""
-    <div class="hpe-alert hpe-alert-success hpe-text-center">
-        <h3>🎉 Selection Saved Successfully!</h3>
-        <p><strong>{len(pruned)} slides</strong> have been selected and saved.</p>
-        <p>You can now close this tab and return to the main workflow.</p>
-        <button onclick="window.close()" class="hpe-btn hpe-btn-primary hpe-mt-4">❌ Close this page (check with your workflow)</button>
-    </div>
-    """
-    
-    return render_slide_page("Selection Saved", "Video2Notes - Slide Selector", success_content)
-
-@app.route('/extract-vocabulary-ajax', methods=['POST'])
-def extract_vocabulary_ajax():
-    """Extract vocabulary from selected slides via AJAX"""
-    try:
-        data = request.get_json()
-        model = data.get('model', 'bedrock/claude-4-sonnet')
-        selected_slide_ids = data.get('selected_slides', [])
-        
-        if not selected_slide_ids:
-            return jsonify({'success': False, 'error': 'No slides selected'})
-        
-        slides = slide_selector_state['slides']
-        folder_path = slide_selector_state['folder_path']
-        
-        # Filter slides to only selected ones
-        selected_slides = [slide for slide in slides if str(slide['group_id']) in selected_slide_ids]
-        
-        if not selected_slides:
-            return jsonify({'success': False, 'error': 'Selected slides not found'})
-        
-        # Extract text from selected slides only
-        concatenated_texts = [slide.get("ocr_text", "") for slide in selected_slides]
-        all_text = "\n".join(concatenated_texts)
-        
-        if not all_text.strip():
-            return jsonify({'success': False, 'error': 'No text found in selected slides'})
-        
-        # Extract vocabulary
-        vocabulary = extract_vocabulary(all_text, model)
-        
-        # Write vocabulary to file
-        if vocabulary is not None and len(vocabulary) > 0:
-            vocabulary_file = os.path.join(folder_path, "vocabulary.txt")
-            with open(vocabulary_file, 'w', encoding='utf-8') as f:
-                f.write(vocabulary)
-        
-            success_message = f"Vocabulary saved to vocabulary.txt ({len(selected_slides)} slides, {model})"
-        
-        return jsonify({
-            'success': True,
-            'vocabulary': vocabulary,
-            'message': success_message,
-            'file_path': vocabulary_file
-        })
-        
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
 
 def initialize_slide_selector(folder_path):
     """Initialize the slide selector with the given folder"""
@@ -1323,20 +1266,18 @@ def initialize_slide_selector(folder_path):
         json_path = original_json_path
     
     try:
-        with open(json_path, "r", encoding="utf-8") as f:
+        with open(json_path, 'r') as f:
             slides = json.load(f)
     except Exception as e:
-        log_message(f"Error loading slides.json: {e}")
+        app.logger.error(f"Error loading slides.json: {e}")
         return False
         
     # Update each slide with a relative image path
     folder_basename = os.path.basename(folder_path)
     for slide in slides:
-        prefix = folder_basename + os.sep
-        if slide["image_path"].startswith(prefix):
-            slide["relative_path"] = slide["image_path"][len(prefix):]
-        else:
-            slide["relative_path"] = slide["image_path"]
+        # Extract filename from image_path (slides JSON uses 'image_path' not 'filename')
+        filename = os.path.basename(slide['image_path'])
+        slide["image_url"] = f"/slide-images/{folder_basename}/{filename}"
     
     # Set global state
     slide_selector_state['folder_path'] = folder_path
@@ -1346,24 +1287,402 @@ def initialize_slide_selector(folder_path):
     log_message(f"Slide selector initialized with {len(slides)} slides")
     return True
 
+# Slide Selector Routes
+@app.route('/select-slides')
+def select_slides_index():
+    """Main slide selection page"""
+    if not slide_selector_state['active']:
+        return render_slide_page(
+            "Slide Selector - Error", 
+            "Slide Selector", 
+            "<div class='hpe-alert hpe-alert-danger'>Slide selector not initialized</div>"
+        )
+    
+    slides = slide_selector_state['slides']
+    folder_path = slide_selector_state['folder_path']
+    
+    # Generate HTML for slides - one per row with larger images
+    slides_html = ""
+    for slide in slides:
+        slides_html += f"""
+        <div class="slide-item" data-slide-id="{slide['group_id']}">
+            <div class="slide-checkbox">
+                <input type="checkbox" id="slide_{slide['group_id']}" value="{slide['group_id']}" checked>
+                <label for="slide_{slide['group_id']}">
+                    <span class="checkbox-label">Select Slide {slide['group_id']}</span>
+                </label>
+            </div>
+            <div class="slide-content">
+                <img src="{slide['image_url']}" alt="Slide {slide['group_id']}" class="slide-image">
+                <div class="slide-info">
+                    <h4>Slide {slide['group_id']}</h4>
+                    <p>Timestamp: {slide.get('timestamp', 'Unknown')}</p>
+                </div>
+            </div>
+        </div>
+        """
+    
+    content = f"""
+    <div class="slides-container">
+        <!-- Top controls -->
+        <div class="slides-header">
+            <div class="slides-controls">
+                <button id="select-all" class="hpe-btn hpe-btn-secondary">Select All</button>
+                <button id="deselect-all" class="hpe-btn hpe-btn-secondary">Deselect All</button>
+                <button id="save-selection-top" class="hpe-btn hpe-btn-primary hpe-btn-lg">Save Selection and Continue the Workflow</button>
+            </div>
+            <div class="slide-count">
+                <span id="selected-count">{len(slides)}</span> of {len(slides)} slides selected
+            </div>
+        </div>
+        
+        <div class="slides-list">
+            {slides_html}
+        </div>
+        
+        <!-- Bottom controls -->
+        <div class="slides-footer">
+            <div class="slides-controls">
+                <button id="select-all-bottom" class="hpe-btn hpe-btn-secondary">Select All</button>
+                <button id="deselect-all-bottom" class="hpe-btn hpe-btn-secondary">Deselect All</button>
+                <button id="save-selection-bottom" class="hpe-btn hpe-btn-primary hpe-btn-lg">Save Selection and Continue the Workflow</button>
+            </div>
+            <div class="slide-count">
+                <span id="selected-count-bottom">{len(slides)}</span> of {len(slides)} slides selected
+            </div>
+        </div>
+        
+        <div class="vocabulary-section">
+            <h3>Extract Vocabulary (Optional)</h3>
+            <div class="vocabulary-controls">
+                <button id="extract-vocab" class="hpe-btn hpe-btn-secondary">Extract Domain Vocabulary</button>
+                <select id="vocab-model" class="hpe-input">
+                    <option value="openai/gpt-4o-2024-08-06">GPT-4o</option>
+                    <option value="bedrock/claude-4-sonnet">Claude 4 Sonnet</option>
+                </select>
+            </div>
+            <div id="vocab-result" class="vocabulary-result hpe-hidden">
+                <h4>Extracted Vocabulary:</h4>
+                <textarea id="vocab-content" class="vocabulary-content" rows="10" placeholder="Vocabulary will appear here after extraction..."></textarea>
+                <div class="vocabulary-actions">
+                    <button id="save-vocab" class="hpe-btn hpe-btn-success">Save Vocabularies</button>
+                    <div id="vocab-status" class="vocabulary-status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <style>
+        .slides-container {{ max-width: 1000px; margin: 0 auto; }}
+        .slides-header, .slides-footer {{ display: flex; justify-content: space-between; align-items: center; margin: 2rem 0; padding: 1.5rem; background: var(--hpe-gray-100); border-radius: var(--hpe-radius-md); }}
+        .slides-controls {{ display: flex; gap: 1rem; align-items: center; }}
+        .slides-list {{ display: flex; flex-direction: column; gap: 2rem; }}
+        .slide-item {{ border: 2px solid #ddd; border-radius: 12px; padding: 2rem; background: white; transition: all 0.3s ease; }}
+        .slide-item.selected {{ border-color: var(--hpe-blue); background-color: #f0f8ff; box-shadow: 0 4px 12px rgba(0, 123, 186, 0.1); }}
+        .slide-checkbox {{ margin-bottom: 1rem; }}
+        .slide-checkbox input[type="checkbox"] {{ transform: scale(1.2); margin-right: 0.5rem; }}
+        .checkbox-label {{ font-weight: 600; color: var(--hpe-blue); }}
+        .slide-content {{ display: flex; flex-direction: column; align-items: center; }}
+        .slide-image {{ width: 100%; max-width: 800px; height: auto; min-height: 400px; object-fit: contain; border: 2px solid #eee; border-radius: 8px; background: #fafafa; }}
+        .slide-info {{ text-align: center; margin-top: 1rem; }}
+        .slide-info h4 {{ margin: 0.5rem 0; font-size: 1.2rem; color: var(--hpe-blue); }}
+        .slide-info p {{ margin: 0.25rem 0; font-size: 1rem; color: #666; }}
+        .vocabulary-actions {{ display: flex; align-items: center; gap: 1rem; margin-top: 1rem; }}
+        .vocabulary-content {{ width: 100%; padding: 1rem; border: 1px solid #ddd; border-radius: var(--hpe-radius-md); font-family: monospace; resize: vertical; }}
+    </style>
+    
+    <script>
+        let selectedSlides = new Set({json.dumps([slide['group_id'] for slide in slides])});
+        
+        function updateSelectedCount() {{
+            const count = selectedSlides.size;
+            document.getElementById('selected-count').textContent = count;
+            document.getElementById('selected-count-bottom').textContent = count;
+        }}
+        
+        function updateSlideAppearance(slideId, isSelected) {{
+            const slideItem = document.querySelector(`[data-slide-id="${{slideId}}"]`);
+            if (isSelected) {{
+                slideItem.classList.add('selected');
+            }} else {{
+                slideItem.classList.remove('selected');
+            }}
+        }}
+        
+        function selectAllSlides() {{
+            document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {{
+                checkbox.checked = true;
+                selectedSlides.add(parseInt(checkbox.value));
+                updateSlideAppearance(parseInt(checkbox.value), true);
+            }});
+            updateSelectedCount();
+        }}
+        
+        function deselectAllSlides() {{
+            document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {{
+                checkbox.checked = false;
+                selectedSlides.delete(parseInt(checkbox.value));
+                updateSlideAppearance(parseInt(checkbox.value), false);
+            }});
+            updateSelectedCount();
+        }}
+        
+        function saveSelection() {{
+            const selectedIds = Array.from(selectedSlides);
+            
+            fetch('/save-slide-selection', {{
+                method: 'POST',
+                headers: {{
+                    'Content-Type': 'application/json'
+                }},
+                body: JSON.stringify({{
+                    selected_ids: selectedIds
+                }})
+            }})
+            .then(response => response.json())
+            .then(data => {{
+                if (data.success) {{
+                    alert(`Selection saved! ${{selectedIds.length}} slides selected. The workflow will continue.`);
+                    window.close();
+                }} else {{
+                    alert('Error saving selection: ' + data.error);
+                }}
+            }})
+            .catch(error => {{
+                alert('Error saving selection: ' + error.message);
+            }});
+        }}
+        
+        // Handle checkbox changes
+        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {{
+            checkbox.addEventListener('change', function() {{
+                const slideId = parseInt(this.value);
+                if (this.checked) {{
+                    selectedSlides.add(slideId);
+                }} else {{
+                    selectedSlides.delete(slideId);
+                }}
+                updateSelectedCount();
+                updateSlideAppearance(slideId, this.checked);
+            }});
+        }});
+        
+        // Top controls
+        document.getElementById('select-all').addEventListener('click', selectAllSlides);
+        document.getElementById('deselect-all').addEventListener('click', deselectAllSlides);
+        document.getElementById('save-selection-top').addEventListener('click', saveSelection);
+        
+        // Bottom controls
+        document.getElementById('select-all-bottom').addEventListener('click', selectAllSlides);
+        document.getElementById('deselect-all-bottom').addEventListener('click', deselectAllSlides);
+        document.getElementById('save-selection-bottom').addEventListener('click', saveSelection);
+        
+        // Extract vocabulary functionality
+        document.getElementById('extract-vocab').addEventListener('click', function() {{
+            const model = document.getElementById('vocab-model').value;
+            const button = this;
+            const resultDiv = document.getElementById('vocab-result');
+            const contentTextarea = document.getElementById('vocab-content');
+            const statusDiv = document.getElementById('vocab-status');
+            
+            button.disabled = true;
+            button.textContent = 'Extracting...';
+            statusDiv.textContent = 'Extracting vocabulary terms...';
+            resultDiv.classList.remove('hpe-hidden');
+            
+            fetch('/extract-vocabulary-ajax', {{
+                method: 'POST',
+                headers: {{
+                    'Content-Type': 'application/json'
+                }},
+                body: JSON.stringify({{
+                    model_id: model
+                }})
+            }})
+            .then(response => response.json())
+            .then(data => {{
+                button.disabled = false;
+                button.textContent = 'Extract Domain Vocabulary';
+                
+                if (data.success) {{
+                    contentTextarea.value = data.vocabulary;
+                    statusDiv.textContent = 'Vocabulary extraction completed. You can edit the text above and save it.';
+                    statusDiv.style.color = 'green';
+                }} else {{
+                    contentTextarea.value = 'Error: ' + data.error;
+                    statusDiv.textContent = 'Vocabulary extraction failed.';
+                    statusDiv.style.color = 'red';
+                }}
+            }})
+            .catch(error => {{
+                button.disabled = false;
+                button.textContent = 'Extract Domain Vocabulary';
+                contentTextarea.value = 'Error: ' + error.message;
+                statusDiv.textContent = 'Vocabulary extraction failed.';
+                statusDiv.style.color = 'red';
+            }});
+        }});
+        
+        // Save vocabulary functionality
+        document.getElementById('save-vocab').addEventListener('click', function() {{
+            const vocabularyText = document.getElementById('vocab-content').value.trim();
+            const button = this;
+            const statusDiv = document.getElementById('vocab-status');
+            
+            if (!vocabularyText) {{
+                alert('Please extract or enter vocabulary text first.');
+                return;
+            }}
+            
+            button.disabled = true;
+            button.textContent = 'Saving...';
+            statusDiv.textContent = 'Saving vocabulary...';
+            
+            fetch('/save-vocabulary', {{
+                method: 'POST',
+                headers: {{
+                    'Content-Type': 'application/json'
+                }},
+                body: JSON.stringify({{
+                    vocabulary: vocabularyText
+                }})
+            }})
+            .then(response => response.json())
+            .then(data => {{
+                button.disabled = false;
+                button.textContent = 'Save Vocabularies';
+                
+                if (data.success) {{
+                    statusDiv.textContent = 'Vocabulary saved successfully to vocabulary.txt';
+                    statusDiv.style.color = 'green';
+                }} else {{
+                    statusDiv.textContent = 'Error saving vocabulary: ' + data.error;
+                    statusDiv.style.color = 'red';
+                }}
+            }})
+            .catch(error => {{
+                button.disabled = false;
+                button.textContent = 'Save Vocabularies';
+                statusDiv.textContent = 'Error saving vocabulary: ' + error.message;
+                statusDiv.style.color = 'red';
+            }});
+        }});
+        
+        // Initialize slide appearances
+        selectedSlides.forEach(slideId => {{
+            updateSlideAppearance(slideId, true);
+        }});
+    </script>
+    """
+    
+    return render_slide_page("Slide Selector", "Select Slides", content)
+
+@app.route('/slide-images/<path:filename>')
+def slide_images(filename):
+    """Serve slide images"""
+    if not slide_selector_state['active']:
+        return jsonify({'error': 'Slide selector not active'}), 400
+    
+    # Extract folder name and image filename
+    parts = filename.split('/', 1)
+    if len(parts) != 2:
+        return jsonify({'error': 'Invalid image path'}), 400
+    
+    folder_name, image_filename = parts
+    
+    # Construct the full path
+    base_folder_path = os.path.dirname(slide_selector_state['folder_path'])
+    image_path = os.path.join(base_folder_path, folder_name, image_filename)
+    
+    # Security check
+    if not os.path.exists(image_path) or not os.path.isfile(image_path):
+        return jsonify({'error': 'Image not found'}), 404
+    
+    return send_file(image_path)
+
+@app.route('/save-slide-selection', methods=['POST'])
+def save_slide_selection():
+    """Save the selected slides"""
+    if not slide_selector_state['active']:
+        return jsonify({'error': 'Slide selector not active'}), 400
+    
+    try:
+        data = request.get_json()
+        selected_ids = data.get('selected_ids', [])
+        
+        slides = slide_selector_state['slides']
+        folder_path = slide_selector_state['folder_path']
+        
+        # Process the slides
+        pruned_slides = process_slides(selected_ids, slides, folder_path)
+        
+        # Save the new slides.json
+        slides_json_path = os.path.join(folder_path, 'slides.json')
+        with open(slides_json_path, 'w') as f:
+            json.dump(pruned_slides, f, indent=2)
+        
+        log_message(f"✅ Slide selection saved: {len(pruned_slides)} slides selected")
+        
+        return jsonify({
+            'success': True,
+            'selected_count': len(pruned_slides),
+            'total_count': len(slides)
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error saving slide selection: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/extract-vocabulary-ajax', methods=['POST'])
+def extract_vocabulary_ajax():
+    """Extract vocabulary via AJAX"""
+    if not slide_selector_state['active']:
+        return jsonify({'error': 'Slide selector not active'}), 400
+    
+    try:
+        data = request.get_json()
+        model_id = data.get('model_id', 'bedrock/claude-4-sonnet')
+        
+        # Collect OCR text from all slides
+        slides = slide_selector_state['slides']
+        ocr_texts = []
+        for slide in slides:
+            if slide.get('ocr_text'):
+                ocr_texts.append(slide['ocr_text'])
+        
+        combined_text = '\n'.join(ocr_texts)
+        
+        if not combined_text.strip():
+            return jsonify({'error': 'No OCR text available'}), 400
+        
+        # Extract vocabulary
+        vocabulary = extract_vocabulary(combined_text, model_id)
+        
+        return jsonify({
+            'success': True,
+            'vocabulary': vocabulary
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error extracting vocabulary: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # Speaker Labeler Helper Functions
 def parse_timestamp(ts_str):
     """Convert a timestamp string to milliseconds."""
     try:
         parts = ts_str.split(':')
         if len(parts) == 2:
-            minutes = int(parts[0])
-            seconds = float(parts[1])
-            return int((minutes * 60 + seconds) * 1000)
+            minutes, seconds = parts
+            return int(float(minutes) * 60 * 1000 + float(seconds) * 1000)
         elif len(parts) == 3:
-            hours = int(parts[0])
-            minutes = int(parts[1])
-            seconds = float(parts[2])
-            return int((hours * 3600 + minutes * 60 + seconds) * 1000)
+            hours, minutes, seconds = parts
+            return int(float(hours) * 3600 * 1000 + float(minutes) * 60 * 1000 + float(seconds) * 1000)
         else:
-            raise ValueError("Invalid timestamp format: " + ts_str)
+            return int(float(ts_str) * 1000)
     except Exception as e:
-        raise ValueError(f"Error parsing timestamp '{ts_str}': {e}")
+        app.logger.error(f"Error parsing timestamp '{ts_str}': {e}")
+        return 0
 
 def load_transcript_for_labeling(transcript_path):
     """Load and parse transcript for speaker labeling."""
@@ -1373,31 +1692,27 @@ def load_transcript_for_labeling(transcript_path):
         with open(transcript_path, 'r', encoding='utf-8') as f:
             transcript_content = f.read()
     except Exception as e:
-        log_message(f"Error reading transcript file: {e}")
+        app.logger.error(f"Error loading transcript: {e}")
         return False
     
     # Regex to match utterance headers like: **SPEAKER_09 [00:02.692]:**
     pattern = re.compile(r'\*\*(SPEAKER_\d{2}) \[([0-9:.]+)\]:\*\*')
     utterances = []
     for match in pattern.finditer(transcript_content):
-        speaker = match.group(1)
+        speaker_id = match.group(1)
         timestamp_str = match.group(2)
-        try:
-            start_ms = parse_timestamp(timestamp_str)
-        except ValueError as e:
-            log_message(f"Error parsing timestamp: {e}")
-            continue
+        start_ms = parse_timestamp(timestamp_str)
+        
         utterances.append({
-            "speaker": speaker,
+            "speaker_id": speaker_id,
             "timestamp_str": timestamp_str,
             "start_ms": start_ms,
-            "header_text": match.group(0),
             "match_start": match.start(),
             "match_end": match.end()
         })
     
     if not utterances:
-        log_message("No utterances found in transcript.")
+        app.logger.error("No speaker utterances found in transcript")
         return False
     
     # Ensure utterances are in the order they appear in the transcript
@@ -1406,17 +1721,17 @@ def load_transcript_for_labeling(transcript_path):
     # Set the end time for each utterance
     for i in range(len(utterances)):
         if i < len(utterances) - 1:
-            utterances[i]["end_ms"] = utterances[i+1]["start_ms"]
+            utterances[i]["end_ms"] = utterances[i + 1]["start_ms"]
         else:
-            utterances[i]["end_ms"] = speaker_labeler_state['audio_duration_ms']
+            utterances[i]["end_ms"] = utterances[i]["start_ms"] + 30000  # Default 30 seconds
     
     # Group utterances by speaker ID
     speaker_occurrences = {}
     for utt in utterances:
-        spk = utt["speaker"]
-        if spk not in speaker_occurrences:
-            speaker_occurrences[spk] = []
-        speaker_occurrences[spk].append(utt)
+        speaker_id = utt["speaker_id"]
+        if speaker_id not in speaker_occurrences:
+            speaker_occurrences[speaker_id] = []
+        speaker_occurrences[speaker_id].append(utt)
     
     # Create an ordered list of unique speaker IDs
     speaker_ids = sorted(speaker_occurrences.keys(), 
@@ -1425,14 +1740,7 @@ def load_transcript_for_labeling(transcript_path):
     # Choose segments for each speaker
     speaker_segments = {}
     for spk, occ_list in speaker_occurrences.items():
-        first_utt = occ_list[0]
-        duration_first = first_utt["end_ms"] - first_utt["start_ms"]
-        chosen = first_utt
-        if duration_first < 5000 and len(occ_list) > 1:
-            second_utt = occ_list[1]
-            duration_second = second_utt["end_ms"] - second_utt["start_ms"]
-            chosen = first_utt if duration_first >= duration_second else second_utt
-        speaker_segments[spk] = (chosen["start_ms"], chosen["end_ms"])
+        speaker_segments[spk] = occ_list[:3]  # Use first 3 occurrences
     
     # Update global state
     speaker_labeler_state.update({
@@ -1460,330 +1768,373 @@ def update_transcript_with_labels():
     replacements_made = []
     
     def replace_func(match):
-        spk = match.group(1)
-        rest = match.group(2)
-        label = speaker_mapping.get(spk, spk)
+        speaker_id = match.group(1)
+        timestamp_part = match.group(2)
         
-        if label != spk:
-            formatted_label = f"SPEAKER - {label}"
-            replacements_made.append(f"{spk} -> SPEAKER - {label}")
+        if speaker_id in speaker_mapping:
+            new_name = speaker_mapping[speaker_id]
+            replacement = f"**{new_name}{timestamp_part}**"
+            replacements_made.append(f"{speaker_id} -> {new_name}")
+            return replacement
         else:
-            formatted_label = label
-            replacements_made.append(f"{spk} -> {label} (unchanged)")
-            
-        return f'**{formatted_label}{rest}**'
+            return match.group(0)  # No replacement
     
     updated_content = pattern.sub(replace_func, updated_content)
     
     # Debug logging
     log_message(f"DEBUG: Made {len(replacements_made)} replacements:")
     for replacement in replacements_made:
-        log_message(f"DEBUG:   {replacement}")
+        log_message(f"DEBUG: {replacement}")
     
     return updated_content
 
 def initialize_speaker_labeler(audio_path, transcript_path):
     """Initialize speaker labeler with audio and transcript."""
     try:
-        # Load audio file
-        audio = AudioSegment.from_file(audio_path)
-        audio_duration_ms = len(audio)
-        
-        # Update global state
-        speaker_labeler_state.update({
-            'audio_file': audio,
-            'audio_duration_ms': audio_duration_ms,
-            'output_transcript_path': transcript_path.replace(".md", "_with_speakernames.md"),
-            'active': True
-        })
-        
-        # Load and parse transcript
-        if load_transcript_for_labeling(transcript_path):
-            log_message(f"Speaker labeler initialized with {len(speaker_labeler_state['speaker_ids'])} speakers")
-            return True
-        else:
+        if not os.path.exists(audio_path):
+            app.logger.error(f"Audio file not found: {audio_path}")
             return False
             
+        if not os.path.exists(transcript_path):
+            app.logger.error(f"Transcript file not found: {transcript_path}")
+            return False
+        
+        # Load audio file
+        audio = AudioSegment.from_file(audio_path)
+        speaker_labeler_state['audio_file'] = audio
+        speaker_labeler_state['audio_duration_ms'] = len(audio)
+        speaker_labeler_state['output_transcript_path'] = transcript_path.replace('.md', '_with_speakernames.md')
+        
+        # Load transcript
+        if not load_transcript_for_labeling(transcript_path):
+            return False
+        
+        speaker_labeler_state['active'] = True
+        log_message(f"Speaker labeler initialized with {len(speaker_labeler_state['speaker_ids'])} speakers")
+        return True
+        
     except Exception as e:
-        log_message(f"Error initializing speaker labeler: {e}")
+        app.logger.error(f"Error initializing speaker labeler: {e}")
         return False
 
 # Speaker Labeler Routes
 @app.route('/label-speakers')
 def label_speakers_index():
-    """Speaker labeling main page"""
-    if not speaker_labeler_state['active'] or not speaker_labeler_state['speaker_ids']:
-        error_content = """
-        <div class="hpe-alert hpe-alert-danger hpe-text-center">
-            <h3>❌ Speaker Labeling Not Available</h3>
-            <p>Speaker labeler is not active or no speakers found.</p>
-            <a href="/" class="hpe-btn hpe-btn-primary hpe-mt-4">🏠 Return to Main Page</a>
-        </div>
-        """
-        return render_template_string("""
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Speaker Labeling</title>
-            <link rel="stylesheet" href="/static/css/hpe-design.css">
-        </head>
-        <body class="hpe-page-wrapper">
-            <div class="hpe-container">
-                <div class="hpe-header">
-                    <h1>🎤 Speaker Labeling</h1>
-                </div>
-                """ + error_content + """
-            </div>
-        </body>
-        </html>
-        """)
+    """Main speaker labeling page"""
+    if not speaker_labeler_state['active']:
+        return render_slide_page(
+            "Speaker Labeler - Error",
+            "Speaker Labeler",
+            "<div class='hpe-alert hpe-alert-danger'>Speaker labeler not initialized</div>"
+        )
     
+    speakers = speaker_labeler_state['speaker_ids']
     current_index = speaker_labeler_state['current_index']
-    speaker_ids = speaker_labeler_state['speaker_ids']
     
-    if current_index >= len(speaker_ids):
+    if current_index >= len(speakers):
+        # All speakers labeled, show results
         return redirect(url_for('speaker_labeling_result'))
     
-    current_speaker = speaker_ids[current_index]
+    current_speaker = speakers[current_index]
+    segments = speaker_labeler_state['speaker_segments'][current_speaker]
     
-    html = f'''
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Speaker Labeling</title>
-        <link rel="stylesheet" href="/static/css/hpe-design.css">
-        <style>
-            .speaker-audio {{
-                width: 100%;
-                margin: var(--hpe-space-5) 0;
-            }}
-            
-            .speaker-form {{
-                margin-top: var(--hpe-space-5);
-            }}
-            
-            .progress-info {{
-                background: var(--hpe-gray-100);
-                padding: var(--hpe-space-4);
-                border-radius: var(--hpe-radius-md);
-                margin-bottom: var(--hpe-space-5);
-                text-align: center;
-            }}
-        </style>
-    </head>
-    <body class="hpe-page-wrapper">
-        <div class="hpe-container">
-            <div class="hpe-header">
-                <h1>🎤 Speaker Labeling</h1>
-                <p>Assign names to speakers in your transcript</p>
-            </div>
-            
-            <div class="progress-info">
-                <h3 class="hpe-mb-2">Speaker {current_index + 1} of {len(speaker_ids)}</h3>
-                <div class="hpe-progress">
-                    <div class="hpe-progress-bar" style="width: {((current_index) / len(speaker_ids)) * 100}%"></div>
-                </div>
-                <p class="hpe-mt-2">{current_index} of {len(speaker_ids)} speakers labeled</p>
-            </div>
-            
-            <div class="hpe-card">
-                <div class="hpe-card-header">
-                    <h3 class="hpe-card-title">Current Speaker: {current_speaker}</h3>
-                </div>
-                
-                <div class="hpe-alert hpe-alert-info">
-                    <p><strong>Instructions:</strong> Listen to the audio clip and enter a name for this speaker. Leave blank to keep the original speaker ID.</p>
-                </div>
-                
-                <audio controls autoplay class="speaker-audio">
-                    <source src="{url_for('play_speaker_audio', speaker_id=current_speaker)}" type="audio/wav">
-                    Your browser does not support the audio element.
-                </audio>
-                
-                <form action="{url_for('label_speaker')}" method="post" class="speaker-form">
-                    <input type="hidden" name="speaker_id" value="{current_speaker}">
-                    
-                    <div class="hpe-form-group">
-                        <label for="label" class="hpe-label">Enter Speaker Name (optional):</label>
-                        <input type="text" id="label" name="label" 
-                               placeholder="e.g., John, Alice, or leave blank for {current_speaker}"
-                               class="hpe-input">
-                        <div class="help-text">Enter a human-readable name for this speaker, or leave blank to keep the original ID.</div>
-                    </div>
-                    
-                    <button type="submit" class="hpe-btn hpe-btn-primary hpe-btn-lg">
-                        ➡️ {('Complete Labeling' if current_index >= len(speaker_ids) - 1 else 'Next Speaker')}
-                    </button>
-                </form>
+    # Generate HTML for segments
+    segments_html = ""
+    for i, segment in enumerate(segments):
+        segments_html += f"""
+        <div class="speaker-segment">
+            <h4>Sample {i+1}</h4>
+            <p><strong>Timestamp:</strong> {segment['timestamp_str']}</p>
+            <audio controls>
+                <source src="/play-speaker-audio/{current_speaker}?segment={i}" type="audio/mpeg">
+                Your browser does not support the audio element.
+            </audio>
+        </div>
+        """
+    
+    content = f"""
+    <div class="speaker-labeler-container">
+        <div class="progress-info">
+            <h3>Speaker {current_index + 1} of {len(speakers)}</h3>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {(current_index / len(speakers)) * 100}%"></div>
             </div>
         </div>
-    </body>
-    </html>
-    '''
-    return html
+        
+        <div class="speaker-info">
+            <h2>Label Speaker: {current_speaker}</h2>
+            <p>Listen to the audio samples below and enter a name for this speaker.</p>
+        </div>
+        
+        <div class="audio-samples">
+            {segments_html}
+        </div>
+        
+        <form id="speaker-form" class="speaker-form">
+            <div class="form-group">
+                <label for="speaker-name">Speaker Name:</label>
+                <input type="text" id="speaker-name" name="speaker_name" 
+                       placeholder="Enter speaker name (e.g., John Smith)" required>
+            </div>
+            <div class="form-buttons">
+                <button type="button" id="skip-speaker" class="hpe-btn hpe-btn-secondary">
+                    Skip This Speaker
+                </button>
+                <button type="submit" class="hpe-btn hpe-btn-primary">
+                    Save & Continue
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <style>
+        .speaker-labeler-container {{ max-width: 800px; margin: 0 auto; }}
+        .progress-info {{ margin-bottom: 2rem; }}
+        .progress-bar {{ width: 100%; height: 10px; background: #eee; border-radius: 5px; }}
+        .progress-fill {{ height: 100%; background: #007cba; border-radius: 5px; transition: width 0.3s; }}
+        .speaker-info {{ margin-bottom: 2rem; }}
+        .audio-samples {{ margin-bottom: 2rem; }}
+        .speaker-segment {{ margin-bottom: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 5px; }}
+        .speaker-form {{ padding: 2rem; background: #f9f9f9; border-radius: 8px; }}
+        .form-group {{ margin-bottom: 1rem; }}
+        .form-group label {{ display: block; margin-bottom: 0.5rem; font-weight: bold; }}
+        .form-group input {{ width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; }}
+        .form-buttons {{ display: flex; gap: 1rem; justify-content: flex-end; }}
+    </style>
+    
+    <script>
+        document.getElementById('speaker-form').addEventListener('submit', function(e) {{
+            e.preventDefault();
+            
+            const speakerName = document.getElementById('speaker-name').value.trim();
+            if (!speakerName) {{
+                alert('Please enter a speaker name');
+                return;
+            }}
+            
+            labelSpeaker(speakerName);
+        }});
+        
+        document.getElementById('skip-speaker').addEventListener('click', function() {{
+            labelSpeaker(''); // Empty name means skip
+        }});
+        
+        function labelSpeaker(name) {{
+            fetch('/label-speaker', {{
+                method: 'POST',
+                headers: {{
+                    'Content-Type': 'application/json'
+                }},
+                body: JSON.stringify({{
+                    speaker_id: '{current_speaker}',
+                    speaker_name: name
+                }})
+            }})
+            .then(response => response.json())
+            .then(data => {{
+                if (data.success) {{
+                    if (data.completed) {{
+                        window.location.href = '/speaker-labeling-result';
+                    }} else {{
+                        window.location.reload(); // Reload to show next speaker
+                    }}
+                }} else {{
+                    alert('Error: ' + data.error);
+                }}
+            }})
+            .catch(error => {{
+                alert('Error: ' + error.message);
+            }});
+        }}
+    </script>
+    """
+    
+    return render_slide_page("Speaker Labeler", "Label Speakers", content)
 
 @app.route('/play-speaker-audio/<speaker_id>')
 def play_speaker_audio(speaker_id):
-    """Serve audio segment for a specific speaker"""
-    if not speaker_labeler_state['active'] or speaker_id not in speaker_labeler_state['speaker_segments']:
-        return "Speaker not found", 404
+    """Generate and serve audio segment for a speaker"""
+    if not speaker_labeler_state['active']:
+        return jsonify({'error': 'Speaker labeler not active'}), 400
     
-    audio = speaker_labeler_state['audio_file']
-    start_ms, end_ms = speaker_labeler_state['speaker_segments'][speaker_id]
+    segment_index = int(request.args.get('segment', 0))
     
-    # Extract audio segment
-    segment = audio[start_ms:end_ms]
-    
-    # Convert to WAV and serve
-    buffer = io.BytesIO()
-    segment.export(buffer, format="wav")
-    buffer.seek(0)
-    
-    return send_file(buffer, mimetype="audio/wav", as_attachment=False)
+    try:
+        segments = speaker_labeler_state['speaker_segments'][speaker_id]
+        if segment_index >= len(segments):
+            return jsonify({'error': 'Invalid segment index'}), 400
+            
+        segment = segments[segment_index]
+        audio = speaker_labeler_state['audio_file']
+        
+        # Extract audio segment with some padding
+        start_ms = max(0, segment['start_ms'] - 500)  # 0.5s before
+        end_ms = min(len(audio), segment['end_ms'] + 500)  # 0.5s after
+        
+        audio_segment = audio[start_ms:end_ms]
+        
+        # Export to temporary file
+        temp_path = f"/tmp/speaker_{speaker_id}_segment_{segment_index}.mp3"
+        audio_segment.export(temp_path, format="mp3")
+        
+        return send_file(temp_path, mimetype="audio/mpeg")
+        
+    except Exception as e:
+        app.logger.error(f"Error serving speaker audio: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/label-speaker', methods=['POST'])
 def label_speaker():
-    """Process speaker label submission"""
-    speaker_id = request.form.get('speaker_id')
-    label = request.form.get('label', '').strip()
+    """Label a speaker and move to the next one"""
+    if not speaker_labeler_state['active']:
+        return jsonify({'error': 'Speaker labeler not active'}), 400
     
-    # Debug logging
-    log_message(f"DEBUG: Received speaker_id: '{speaker_id}'")
-    log_message(f"DEBUG: Received label: '{label}'")
-    log_message(f"DEBUG: Current speaker_mapping before update: {speaker_labeler_state['speaker_mapping']}")
-    
-    if label:
-        speaker_labeler_state['speaker_mapping'][speaker_id] = label
-        log_message(f"Speaker {speaker_id} labeled as: {label}")
-    else:
-        log_message(f"Speaker {speaker_id} kept original name")
-    
-    # Debug logging after update
-    log_message(f"DEBUG: Current speaker_mapping after update: {speaker_labeler_state['speaker_mapping']}")
-    
-    # Move to next speaker
-    speaker_labeler_state['current_index'] += 1
-    
-    return redirect(url_for('label_speakers_index'))
+    try:
+        data = request.get_json()
+        speaker_id = data.get('speaker_id')
+        speaker_name = data.get('speaker_name', '').strip();
+        
+        # Update speaker mapping
+        if speaker_name:
+            speaker_labeler_state['speaker_mapping'][speaker_id] = speaker_name
+            log_message(f"Labeled {speaker_id} as '{speaker_name}'")
+        else:
+            log_message(f"Skipped labeling for {speaker_id}")
+        
+        # Move to next speaker
+        speaker_labeler_state['current_index'] += 1
+        speakers = speaker_labeler_state['speaker_ids']
+        
+        completed = speaker_labeler_state['current_index'] >= len(speakers)
+        
+        if completed:
+            # Generate updated transcript
+            updated_transcript = update_transcript_with_labels()
+            output_path = speaker_labeler_state['output_transcript_path']
+            
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(updated_transcript)
+            
+            log_message(f"✅ Speaker labeling completed. Updated transcript saved to: {output_path}")
+            speaker_labeler_state['active'] = False
+        
+        return jsonify({
+            'success': True,
+            'completed': completed,
+            'current_index': speaker_labeler_state['current_index'],
+            'total_speakers': len(speakers)
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error labeling speaker: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/speaker-labeling-result')
 def speaker_labeling_result():
-    """Show speaker labeling completion page"""
-    speaker_mapping = speaker_labeler_state['speaker_mapping']
-    
-    # Debug logging
-    log_message(f"DEBUG: Final speaker_mapping: {speaker_mapping}")
-    log_message(f"DEBUG: Available speaker_ids: {speaker_labeler_state['speaker_ids']}")
-    
-    # Generate updated transcript
-    updated_transcript = update_transcript_with_labels()
-    
-    # Save updated transcript
+    """Show speaker labeling results"""
+    mapping = speaker_labeler_state['speaker_mapping']
     output_path = speaker_labeler_state['output_transcript_path']
-    log_message(f"DEBUG: Saving updated transcript to: {output_path}")
     
-    try:
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(updated_transcript)
-        save_message = f"Updated transcript saved to: {output_path}"
-        save_status = "success"
-        log_message(f"DEBUG: Successfully saved transcript with {len(updated_transcript)} characters")
-    except Exception as e:
-        save_message = f"Error saving transcript: {e}"
-        save_status = "danger"
-        log_message(f"DEBUG: Error saving transcript: {e}")
+    # Generate summary
+    mapping_html = ""
+    for speaker_id, name in mapping.items():
+        mapping_html += f"<li><strong>{speaker_id}</strong> → {name}</li>"
     
-    # Deactivate speaker labeler
-    speaker_labeler_state['active'] = False
+    if not mapping_html:
+        mapping_html = "<li>No speakers were labeled</li>"
     
-    # Build mapping display
-    mapping_items = ""
-    for speaker_id in speaker_labeler_state['speaker_ids']:
-        label = speaker_mapping.get(speaker_id, speaker_id)
-        mapping_items += f'<li><strong>{speaker_id}</strong> → <em>{label}</em></li>'
-    
-    html = f'''
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Speaker Labeling Complete</title>
-        <link rel="stylesheet" href="/static/css/hpe-design.css">
-    </head>
-    <body class="hpe-page-wrapper">
-        <div class="hpe-container">
-            <div class="hpe-header">
-                <h1>🎉 Speaker Labeling Complete!</h1>
-                <p>All speakers have been successfully labeled</p>
-            </div>
-            
-            <div class="hpe-alert hpe-alert-{save_status}">
-                <p>{save_message}</p>
-            </div>
-            
-            <div class="hpe-card">
-                <div class="hpe-card-header">
-                    <h3 class="hpe-card-title">📋 Speaker Mappings</h3>
-                </div>
-                <ul class="hpe-mb-0">
-                    {mapping_items}
-                </ul>
-            </div>
-            
-            <div class="hpe-text-center hpe-mt-6">
-                <p class="hpe-mb-4">You can now close this tab and return to the main workflow.</p>
-                <button onclick="window.close()" class="hpe-btn hpe-btn-primary hpe-btn-lg">❌ Close this page (check with your workflow)</button>
-            </div>
+    content = f"""
+    <div class="results-container">
+        <div class="hpe-alert hpe-alert-success">
+            <h3>✅ Speaker Labeling Completed!</h3>
         </div>
-    </body>
-    </html>
-    '''
+        
+        <div class="results-summary">
+            <h4>Speaker Mappings:</h4>
+            <ul>
+                {mapping_html}
+            </ul>
+        </div>
+        
+        <div class="results-actions">
+            <p><strong>Updated transcript saved to:</strong> {output_path}</p>
+            <button onclick="window.close()" class="hpe-btn hpe-btn-primary">
+                Close Window
+            </button>
+        </div>
+    </div>
     
-    return html
+    <style>
+        .results-container {{ max-width: 600px; margin: 0 auto; }}
+        .results-summary {{ margin: 2rem 0; }}
+        .results-summary ul {{ background: #f9f9f9; padding: 1rem; border-radius: 5px; }}
+        .results-actions {{ text-align: center; }}
+    </style>
+    """
+    
+    return render_slide_page("Speaker Labeling Results", "Results", content)
 
 @app.route('/debug/files')
 def debug_files():
-    """Debug endpoint to list available files for download"""
-    if not workflow_state['output_dir'] or not os.path.exists(workflow_state['output_dir']):
-        return jsonify({'error': 'No output directory available'})
+    """Debug endpoint to list files in various directories"""
+    info = {}
     
-    try:
-        files_info = []
+    # Upload folder
+    if os.path.exists(app.config['UPLOAD_FOLDER']):
+        info['upload_folder'] = {
+            'path': app.config['UPLOAD_FOLDER'],
+            'files': os.listdir(app.config['UPLOAD_FOLDER'])
+        }
+    
+    # Workflow output directory
+    if workflow_state.get('output_dir') and os.path.exists(workflow_state['output_dir']):
+        info['output_dir'] = {
+            'path': workflow_state['output_dir'],
+            'files': []
+        }
         for root, dirs, files in os.walk(workflow_state['output_dir']):
             for file in files:
-                full_path = os.path.join(root, file)
-                rel_path = os.path.relpath(full_path, workflow_state['output_dir'])
-                file_size = os.path.getsize(full_path)
-                files_info.append({
-                    'relative_path': rel_path,
-                    'full_path': full_path,
-                    'size_bytes': file_size,
-                    'size_mb': round(file_size / (1024 * 1024), 2),
-                    'exists': os.path.exists(full_path)
-                })
-        
-        return jsonify({
-            'output_dir': workflow_state['output_dir'],
-            'video_name': workflow_state.get('video_name', 'Unknown'),
-            'notes_path': workflow_state.get('notes_path', 'Not set'),
-            'audio_path': workflow_state.get('audio_path', 'Not set'),
-            'slides_dir': workflow_state.get('slides_dir', 'Not set'),
-            'total_files': len(files_info),
-            'files': files_info
-        })
-    except Exception as e:
-        return jsonify({'error': f'Error listing files: {str(e)}'})
+                rel_path = os.path.relpath(os.path.join(root, file), workflow_state['output_dir'])
+                info['output_dir']['files'].append(rel_path)
+    
+    return jsonify(info)
 
 # Static files route for CSS
 @app.route('/static/<path:filename>')
 def static_files(filename):
-    """Serve static files (CSS, JS, etc.)"""
+    """Serve static files"""
     return send_from_directory('static', filename)
+
+@app.route('/save-vocabulary', methods=['POST'])
+def save_vocabulary():
+    """Save vocabulary to vocabulary.txt file"""
+    if not slide_selector_state['active']:
+        return jsonify({'error': 'Slide selector not active'}), 400
+    
+    try:
+        data = request.get_json()
+        vocabulary_text = data.get('vocabulary', '').strip()
+        
+        if not vocabulary_text:
+            return jsonify({'error': 'No vocabulary text provided'}), 400
+        
+        # Save to vocabulary.txt in the slides folder
+        folder_path = slide_selector_state['folder_path']
+        vocab_file_path = os.path.join(folder_path, 'vocabulary.txt')
+        
+        with open(vocab_file_path, 'w', encoding='utf-8') as f:
+            f.write(vocabulary_text)
+        
+        log_message(f"✅ Vocabulary saved to: {vocab_file_path}")
+        
+        return jsonify({
+            'success': True,
+            'file_path': vocab_file_path
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error saving vocabulary: {e}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     # Set up logging
@@ -1793,5 +2144,7 @@ if __name__ == '__main__':
     logging.info(f"📝 Access the application at: http://0.0.0.0:{MAIN_APP_PORT}")
     logging.info("🔧 Slide selector and speaker labeler are now integrated into the main app")
     
+    # Create static directory if it doesn't exist
+    os.makedirs('static/css', exist_ok=True)
 
     app.run(host='0.0.0.0', port=MAIN_APP_PORT, debug=False, threaded=True)

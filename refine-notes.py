@@ -1,7 +1,14 @@
 import re
 import os
 import argparse
+import logging
 from utils import initialize_client, get_llm_response
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 # Read markdown file content
 def read_markdown_file(file_path):
@@ -70,14 +77,14 @@ def process_markdown_transcript(transcript, output_file_path, lec_summary, clien
     # Step 3: Refine each chunk using LLM API
     refined_chunks = []
     for chunk in transcript_chunks:
-        print(f"Before refine, length: {len(chunk)}\n{chunk[:500]}")
+        logging.info(f"Before refine, length: {len(chunk)}\n{chunk[:500]}")
         refined_chunk = refine_text_with_llm(chunk, lec_summary, client, llm)
-        print(f"After refine, length: {len(refined_chunk)}\n{refined_chunk[:500]}\n=======\n")
+        logging.info(f"After refine, length: {len(refined_chunk)}\n{refined_chunk[:500]}\n=======\n")
         refined_chunks.append(refined_chunk)
 
     # Step 4: Save refined transcript back to markdown
     save_refined_transcript(refined_chunks, output_file_path)
-    print(f"Refined transcript saved to: {output_file_path}")
+    logging.info(f"Refined transcript saved to: {output_file_path}")
 
 def parse_arguments():
     """Parse command-line arguments."""
@@ -108,13 +115,11 @@ Here's a summary of the transcript in two to three paragraphs:
     user_prompt = summary_template.format(transcript=transcript)
 
     # Call LLM to get a summary of the transcript
-    print(f"Getting a summary of the transcript using {args.model}...")
+    logging.info(f"Getting a summary of the transcript using {args.model}...")
     lec_summary = get_llm_response(client, args.model, user_prompt)
-    print(f"Summary of the transcript:\n{lec_summary}\n=============\nNow working on refining the transcript...\n")
-
+    logging.info(f"Summary of the transcript:\n{lec_summary}\n=============\nNow working on refining the transcript...\n")
     input_file_name = os.path.basename(args.input)
     output_file_name = f"refined_{input_file_name}" if not args.output else f"{args.output}/refined_{input_file_name}"
-    print(f"Output file: {output_file_name}")
-
+    logging.info(f"Output file: {output_file_name}")
     # Process the markdown transcript
     process_markdown_transcript(transcript, output_file_name, lec_summary, client, args.model, args.max_chars)

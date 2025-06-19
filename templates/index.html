@@ -127,6 +127,44 @@
             color: #721c24;
             text-align: center;
         }
+
+        /* SharePoint-specific styles */
+        .sharepoint-controls {
+            display: flex;
+            gap: var(--hpe-space-3);
+            margin-bottom: var(--hpe-space-3);
+        }
+
+        .sharepoint-file-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .sharepoint-file-item {
+            padding: var(--hpe-space-3);
+            border-bottom: 1px solid var(--hpe-gray-200);
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .sharepoint-file-item:hover {
+            background-color: var(--hpe-gray-100);
+        }
+
+        .sharepoint-file-item.selected {
+            background-color: var(--hpe-blue-light);
+            border-left: 4px solid var(--hpe-blue);
+        }
+
+        .sharepoint-file-name {
+            font-weight: 500;
+            margin-bottom: var(--hpe-space-1);
+        }
+
+        .sharepoint-file-meta {
+            font-size: 0.9rem;
+            color: var(--hpe-gray-600);
+        }
     </style>
 </head>
 <body class="hpe-page-wrapper">
@@ -161,6 +199,9 @@
                         
                         <input type="radio" id="method_upload" name="input_method" value="upload">
                         <label for="method_upload" class="toggle-label">📁 Upload File</label>
+                        
+                        <input type="radio" id="method_sharepoint" name="input_method" value="sharepoint">
+                        <label for="method_sharepoint" class="toggle-label">☁️ SharePoint</label>
                     </div>
                 </div>
                 
@@ -190,6 +231,47 @@
                         
                         <!-- Upload status -->
                         <div id="upload_status" class="hpe-hidden"></div>
+                    </div>
+                </div>
+                
+                <!-- SharePoint section -->
+                <div id="sharepoint_section" class="hpe-hidden">
+                    <div class="hpe-form-group">
+                        <label class="hpe-label">SharePoint Video Files</label>
+                        <div class="sharepoint-controls">
+                            <button type="button" id="load_sharepoint_btn" class="hpe-btn hpe-btn-primary">
+                                ☁️ Load SharePoint Videos
+                            </button>
+                            <button type="button" id="download_sharepoint_btn" class="hpe-btn hpe-btn-success" disabled>
+                                ⬇️ Download Selected
+                            </button>
+                        </div>
+                        <div class="help-text">
+                            Load video files from SharePoint and select one to download
+                        </div>
+                        
+                        <!-- SharePoint file list -->
+                        <div id="sharepoint_files" class="hpe-hidden hpe-mt-4">
+                            <div class="hpe-card">
+                                <div class="hpe-card-header">
+                                    <h4>Available Video Files</h4>
+                                </div>
+                                <div id="sharepoint_file_list" class="sharepoint-file-list">
+                                    <!-- Files will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- SharePoint progress -->
+                        <div id="sharepoint_progress" class="hpe-hidden hpe-mt-4">
+                            <div class="hpe-progress">
+                                <div class="hpe-progress-bar" id="sharepoint_progress_bar"></div>
+                            </div>
+                            <div class="hpe-text-center" id="sharepoint_progress_text">Loading...</div>
+                        </div>
+                        
+                        <!-- SharePoint status -->
+                        <div id="sharepoint_status" class="hpe-hidden"></div>
                     </div>
                 </div>
                 
@@ -350,13 +432,20 @@
             radio.addEventListener('change', function() {
                 const uploadSection = document.getElementById('upload_section');
                 const pathSection = document.getElementById('path_section');
+                const sharepointSection = document.getElementById('sharepoint_section');
+                
+                // Hide all sections first
+                uploadSection.classList.add('hpe-hidden');
+                pathSection.classList.add('hpe-hidden');
+                sharepointSection.classList.add('hpe-hidden');
                 
                 if (this.value === 'upload') {
                     uploadSection.classList.remove('hpe-hidden');
-                    pathSection.classList.add('hpe-hidden');
+                    document.getElementById('video_path').removeAttribute('required');
+                } else if (this.value === 'sharepoint') {
+                    sharepointSection.classList.remove('hpe-hidden');
                     document.getElementById('video_path').removeAttribute('required');
                 } else {
-                    uploadSection.classList.add('hpe-hidden');
                     pathSection.classList.remove('hpe-hidden');
                     document.getElementById('video_path').setAttribute('required', 'required');
                 }
@@ -364,6 +453,7 @@
                 // Clear the final video path when switching methods
                 document.getElementById('final_video_path').value = '';
                 clearUploadStatus();
+                clearSharePointStatus();
             });
         });
 
@@ -478,11 +568,166 @@
             progressContainer.classList.add('hpe-hidden');
         }
 
+        // SharePoint functionality
+        let selectedSharePointFile = null;
+
+        function clearSharePointStatus() {
+            const statusDiv = document.getElementById('sharepoint_status');
+            statusDiv.classList.add('hpe-hidden');
+            const progressContainer = document.getElementById('sharepoint_progress');
+            progressContainer.classList.add('hpe-hidden');
+            const filesContainer = document.getElementById('sharepoint_files');
+            filesContainer.classList.add('hpe-hidden');
+        }
+
+        function showSharePointStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('sharepoint_status');
+            const alertClass = type === 'error' ? 'hpe-alert-danger' : 
+                             type === 'success' ? 'hpe-alert-success' : 'hpe-alert-info';
+            statusDiv.innerHTML = message;
+            statusDiv.className = `hpe-alert ${alertClass} hpe-mt-3`;
+            statusDiv.classList.remove('hpe-hidden');
+        }
+
+        function showSharePointProgress(text) {
+            const progressContainer = document.getElementById('sharepoint_progress');
+            const progressText = document.getElementById('sharepoint_progress_text');
+            progressText.textContent = text;
+            progressContainer.classList.remove('hpe-hidden');
+        }
+
+        function hideSharePointProgress() {
+            const progressContainer = document.getElementById('sharepoint_progress');
+            progressContainer.classList.add('hpe-hidden');
+        }
+
+        // SharePoint event handlers
+        document.getElementById('load_sharepoint_btn').addEventListener('click', function() {
+            loadSharePointVideos();
+        });
+
+        document.getElementById('download_sharepoint_btn').addEventListener('click', function() {
+            downloadSelectedSharePointVideo();
+        });
+
+        function loadSharePointVideos() {
+            const loadBtn = document.getElementById('load_sharepoint_btn');
+            const originalText = loadBtn.textContent;
+            loadBtn.disabled = true;
+            loadBtn.textContent = 'Loading SharePoint Videos...';
+            
+            showSharePointProgress('Loading SharePoint videos...');
+            clearSharePointStatus();
+            
+            fetch('/sharepoint/list_videos')
+                .then(response => response.json())
+                .then(data => {
+                    hideSharePointProgress();
+                    loadBtn.disabled = false;
+                    loadBtn.textContent = originalText;
+                    
+                    if (data.success) {
+                        displaySharePointFiles(data.files);
+                        showSharePointStatus(`Found ${data.total_count} video files`, 'success');
+                    } else {
+                        showSharePointStatus(`Error: ${data.error}`, 'error');
+                    }
+                })
+                .catch(error => {
+                    hideSharePointProgress();
+                    loadBtn.disabled = false;
+                    loadBtn.textContent = originalText;
+                    showSharePointStatus(`Error loading SharePoint videos: ${error.message}`, 'error');
+                });
+        }
+
+        function displaySharePointFiles(files) {
+            const filesContainer = document.getElementById('sharepoint_files');
+            const fileList = document.getElementById('sharepoint_file_list');
+            
+            fileList.innerHTML = '';
+            
+            files.forEach(file => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'sharepoint-file-item';
+                fileItem.dataset.index = file.index;
+                
+                fileItem.innerHTML = `
+                    <div class="sharepoint-file-name">${file.filename}</div>
+                    <div class="sharepoint-file-meta">
+                        Modified: ${file.modified} | Size: ${file.size}
+                    </div>
+                `;
+                
+                fileItem.addEventListener('click', function() {
+                    // Remove selection from other items
+                    document.querySelectorAll('.sharepoint-file-item').forEach(item => {
+                        item.classList.remove('selected');
+                    });
+                    
+                    // Select this item
+                    this.classList.add('selected');
+                    selectedSharePointFile = file;
+                    
+                    // Enable download button
+                    document.getElementById('download_sharepoint_btn').disabled = false;
+                });
+                
+                fileList.appendChild(fileItem);
+            });
+            
+            filesContainer.classList.remove('hpe-hidden');
+        }
+
+        function downloadSelectedSharePointVideo() {
+            if (!selectedSharePointFile) {
+                showSharePointStatus('Please select a file first', 'error');
+                return;
+            }
+            
+            const downloadBtn = document.getElementById('download_sharepoint_btn');
+            const originalText = downloadBtn.textContent;
+            downloadBtn.disabled = true;
+            downloadBtn.textContent = '⏳ Downloading...';
+            
+            showSharePointProgress(`Downloading ${selectedSharePointFile.filename}...`);
+            clearSharePointStatus();
+            
+            fetch(`/sharepoint/download/${selectedSharePointFile.index}`, {
+                method: 'POST'
+            })
+                .then(response => response.json())
+                .then(data => {
+                    hideSharePointProgress();
+                    downloadBtn.disabled = false;
+                    downloadBtn.textContent = originalText;
+                    
+                    if (data.success) {
+                        showSharePointStatus(`✅ Successfully downloaded: ${data.filename} (${data.size_mb} MB)<br/>Ready to start workflow!`, 'success');
+                        // Set the final video path for the workflow
+                        document.getElementById('final_video_path').value = data.file_path;
+                        
+                        // Update button to show completion
+                        downloadBtn.textContent = '✅ Downloaded';
+                        downloadBtn.classList.remove('hpe-btn-success');
+                        downloadBtn.classList.add('hpe-btn-secondary');
+                    } else {
+                        showSharePointStatus(`Download failed: ${data.error}`, 'error');
+                    }
+                })
+                .catch(error => {
+                    hideSharePointProgress();
+                    downloadBtn.disabled = false;
+                    downloadBtn.textContent = originalText;
+                    showSharePointStatus(`Error downloading file: ${error.message}`, 'error');
+                });
+        }
+
         // File browser functionality
         let currentBrowsePath = '';
         let selectedFilePath = '';
 
-        document.querySelector('.hpe-btn-success').addEventListener('click', function() {
+        document.querySelector('#path_section .hpe-btn-success').addEventListener('click', function() {
             showFileBrowser();
         });
 
@@ -632,4 +877,4 @@
         }
     </script>
 </body>
-</html> 
+</html>

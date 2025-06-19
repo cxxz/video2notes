@@ -25,7 +25,7 @@ if [ ! -f "templates/index.html" ] || [ ! -f "templates/workflow.html" ]; then
 fi
 
 # Check if main scripts exist
-REQUIRED_SCRIPTS=("01-preprocess.py" "02-extract-slides.py" "03-transcribe.py" "04-generate-notes.py" "05-label-speakers.py" "06-refine-notes.py" "slides_selector.py")
+REQUIRED_SCRIPTS=("preprocess-video.py" "extract-slides.py" "transcribe-audio.py" "generate-notes.py" "label-speakers.py" "refine-notes.py" "slides_selector.py")
 
 for script in "${REQUIRED_SCRIPTS[@]}"; do
     if [ ! -f "$script" ]; then
