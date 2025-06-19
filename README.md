@@ -1,6 +1,6 @@
 # Video2Notes
 
-Transform presentation videos into structured notes with slide screenshots and speaker identification.
+Transform presentation videos into structured notes with key screenshots and speaker identification.
 
 ## Quick Start
 
@@ -44,8 +44,7 @@ video2notes/
 │   ├── transcribe-audio.py
 │   ├── generate-notes.py
 │   └── ...
-├── config/                # Configuration
-│   └── .env.sample       
+├── .env.sample                # Configuration  
 ├── docs/                  # Documentation
 │   └── API.md            
 ├── start_web_app.sh      # Application launcher
@@ -60,15 +59,19 @@ video2notes/
 ```bash
 # Authentication
 HF_TOKEN=your_huggingface_token        # Required for transcription
-FLASK_SECRET_KEY=your_secret_key        # Required for sessions
 
-# Optional - AI Models
-OPENAI_API_KEY=your_openai_key         # For LLM refinement
+# Optional - LLM
+V2N_API_KEY=your_openai_key         # For LLM refinement
+
+# Optional - Local Whipser Model
 LOCAL_WHISPER_MODEL=/path/to/model     # Local Whisper model
 LOCAL_DIARIZE_MODEL=/path/to/model     # Local diarization model
 
 # Optional - SharePoint
 SHAREPOINT_URL=https://your.sharepoint.com/path
+
+# Optional - Misc
+FLASK_SECRET_KEY=your_secret_key
 ```
 
 ### SharePoint Setup
