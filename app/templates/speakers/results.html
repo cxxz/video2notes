@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speaker Labeling Results - Video2Notes</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/hpe-design.css') }}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #007cba;
+        }
+        .results-container {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 30px;
+        }
+        .success-message {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .success-message h3 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .results-summary {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .results-summary h4 {
+            color: #007cba;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        .speaker-mapping {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .speaker-mapping li {
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #007cba;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .speaker-id {
+            font-family: monospace;
+            font-weight: bold;
+            color: #666;
+        }
+        .speaker-name {
+            color: #333;
+            font-weight: 500;
+        }
+        .arrow {
+            color: #007cba;
+            margin: 0 10px;
+        }
+        .no-mappings {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 20px;
+        }
+        .file-info {
+            background: #e7f3ff;
+            border: 1px solid #b8daff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        .file-info p {
+            margin: 5px 0;
+            color: #004085;
+        }
+        .file-path {
+            font-family: monospace;
+            font-size: 14px;
+            word-break: break-all;
+        }
+        .results-actions {
+            text-align: center;
+        }
+        .btn {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 36px;
+            font-weight: bold;
+            color: #007cba;
+            display: block;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎤 Speaker Labeling Results</h1>
+        <p>Summary of labeled speakers</p>
+    </div>
+
+    <div class="results-container">
+        <div class="success-message">
+            <h3>✅ Speaker Labeling Completed!</h3>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-item">
+                <span class="stat-value">{{ total_speakers }}</span>
+                <span class="stat-label">Total Speakers</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">{{ labeled_count }}</span>
+                <span class="stat-label">Speakers Labeled</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">{{ skipped_count }}</span>
+                <span class="stat-label">Speakers Skipped</span>
+            </div>
+        </div>
+        
+        <div class="results-summary">
+            <h4>Speaker Mappings:</h4>
+            {% if speaker_mapping %}
+                <ul class="speaker-mapping">
+                    {% for speaker_id, name in speaker_mapping.items() %}
+                    <li>
+                        <span>
+                            <span class="speaker-id">{{ speaker_id }}</span>
+                            <span class="arrow">→</span>
+                            <span class="speaker-name">{{ name }}</span>
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="no-mappings">No speakers were labeled</p>
+            {% endif %}
+        </div>
+        
+        {% if output_path %}
+        <div class="file-info">
+            <p><strong>Updated transcript saved to:</strong></p>
+            <p class="file-path">{{ output_path }}</p>
+        </div>
+        {% endif %}
+        
+        <div class="results-actions">
+            <button onclick="closeWindow()" class="btn">
+                Return to Workflow
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function closeWindow() {
+            // Try to close the window if it was opened by JavaScript
+            if (window.opener) {
+                window.close();
+            } else {
+                // Otherwise, redirect to workflow progress
+                window.location.href = '{{ url_for("workflow.progress") }}';
+            }
+        }
+        
+        // Automatically close after 10 seconds if opened as a popup
+        if (window.opener) {
+            setTimeout(function() {
+                window.close();
+            }, 10000);
+        }
+    </script>
+</body>
+</html>

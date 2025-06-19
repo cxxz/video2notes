@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slide Selector</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/hpe-design.css') }}">
+    <style>
+        /* Page-specific overrides for slide selector */
+        .vocabulary-section {
+            margin-top: var(--hpe-space-6);
+            padding: var(--hpe-space-5);
+            background: var(--hpe-gray-100);
+            border-radius: var(--hpe-radius-md);
+        }
+        
+        .vocabulary-controls {
+            display: flex;
+            align-items: center;
+            gap: var(--hpe-space-3);
+            margin-bottom: var(--hpe-space-4);
+        }
+        
+        .vocabulary-result {
+            background: var(--hpe-white);
+            border: 1px solid var(--hpe-gray-300);
+            border-radius: var(--hpe-radius-md);
+            padding: var(--hpe-space-4);
+            margin-top: var(--hpe-space-4);
+        }
+        
+        .vocabulary-content {
+            background: var(--hpe-gray-100);
+            padding: var(--hpe-space-4);
+            border-radius: var(--hpe-radius-md);
+            margin: var(--hpe-space-3) 0;
+            white-space: pre-wrap;
+            font-family: var(--hpe-font-mono);
+            font-size: 0.9rem;
+        }
+        
+        .vocabulary-status {
+            margin-top: var(--hpe-space-3);
+            font-weight: 500;
+        }
+
+        .slides-container { max-width: 1000px; margin: 0 auto; }
+        .slides-header, .slides-footer { display: flex; justify-content: space-between; align-items: center; margin: 2rem 0; padding: 1.5rem; background: var(--hpe-gray-100); border-radius: var(--hpe-radius-md); }
+        .slides-controls { display: flex; gap: 1rem; align-items: center; }
+        .slides-list { display: flex; flex-direction: column; gap: 2rem; }
+        .slide-item { border: 2px solid #ddd; border-radius: 12px; padding: 2rem; background: white; transition: all 0.3s ease; }
+        .slide-item.selected { border-color: var(--hpe-blue); background-color: #f0f8ff; box-shadow: 0 4px 12px rgba(0, 123, 186, 0.1); }
+        .slide-checkbox { margin-bottom: 1rem; }
+        .slide-checkbox input[type="checkbox"] { transform: scale(1.2); margin-right: 0.5rem; }
+        .checkbox-label { font-weight: 600; color: var(--hpe-blue); }
+        .slide-content { display: flex; flex-direction: column; align-items: center; }
+        .slide-image { width: 100%; max-width: 800px; height: auto; min-height: 400px; object-fit: contain; border: 2px solid #eee; border-radius: 8px; background: #fafafa; }
+        .slide-info { text-align: center; margin-top: 1rem; }
+        .slide-info h4 { margin: 0.5rem 0; font-size: 1.2rem; color: var(--hpe-blue); }
+        .slide-info p { margin: 0.25rem 0; font-size: 1rem; color: #666; }
+        .vocabulary-actions { display: flex; align-items: center; gap: 1rem; margin-top: 1rem; }
+        .vocabulary-content { width: 100%; padding: 1rem; border: 1px solid #ddd; border-radius: var(--hpe-radius-md); font-family: monospace; resize: vertical; }
+    </style>
+</head>
+<body class="hpe-page-wrapper">
+    <div class="hpe-container">
+        <div class="hpe-header">
+            <h1>Select Slides</h1>
+        </div>
+        
+        {% if error %}
+        <div class="hpe-alert hpe-alert-danger">
+            {{ error }}
+        </div>
+        {% else %}
+        
+        <div class="slides-container">
+            <!-- Top controls -->
+            <div class="slides-header">
+                <div class="slides-controls">
+                    <button id="select-all" class="hpe-btn hpe-btn-secondary">Select All</button>
+                    <button id="deselect-all" class="hpe-btn hpe-btn-secondary">Deselect All</button>
+                    <button id="save-selection-top" class="hpe-btn hpe-btn-primary hpe-btn-lg">Save Selection and Continue the Workflow</button>
+                </div>
+                <div class="slide-count">
+                    <span id="selected-count">{{ slides|length }}</span> of {{ slides|length }} slides selected
+                </div>
+            </div>
+            
+            <div class="slides-list">
+                {% for slide in slides %}
+                <div class="slide-item" data-slide-id="{{ slide.group_id }}">
+                    <div class="slide-checkbox">
+                        <input type="checkbox" id="slide_{{ slide.group_id }}" value="{{ slide.group_id }}" checked>
+                        <label for="slide_{{ slide.group_id }}">
+                            <span class="checkbox-label">Select Slide {{ slide.group_id }}</span>
+                        </label>
+                    </div>
+                    <div class="slide-content">
+                        <img src="{{ slide.image_url }}" alt="Slide {{ slide.group_id }}" class="slide-image">
+                        <div class="slide-info">
+                            <h4>Slide {{ slide.group_id }}</h4>
+                            <p>Timestamp: {{ slide.timestamp|default('Unknown') }}</p>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <!-- Bottom controls -->
+            <div class="slides-footer">
+                <div class="slides-controls">
+                    <button id="select-all-bottom" class="hpe-btn hpe-btn-secondary">Select All</button>
+                    <button id="deselect-all-bottom" class="hpe-btn hpe-btn-secondary">Deselect All</button>
+                    <button id="save-selection-bottom" class="hpe-btn hpe-btn-primary hpe-btn-lg">Save Selection and Continue the Workflow</button>
+                </div>
+                <div class="slide-count">
+                    <span id="selected-count-bottom">{{ slides|length }}</span> of {{ slides|length }} slides selected
+                </div>
+            </div>
+            
+            <div class="vocabulary-section">
+                <h3>Extract Vocabulary (Optional)</h3>
+                <div class="vocabulary-controls">
+                    <button id="extract-vocab" class="hpe-btn hpe-btn-secondary">Extract Domain Vocabulary</button>
+                    <select id="vocab-model" class="hpe-input">
+                        <option value="openai/gpt-4o-2024-08-06">GPT-4o</option>
+                        <option value="bedrock/claude-4-sonnet">Claude 4 Sonnet</option>
+                    </select>
+                </div>
+                <div id="vocab-result" class="vocabulary-result hpe-hidden">
+                    <h4>Extracted Vocabulary:</h4>
+                    <textarea id="vocab-content" class="vocabulary-content" rows="10" placeholder="Vocabulary will appear here after extraction..."></textarea>
+                    <div class="vocabulary-actions">
+                        <button id="save-vocab" class="hpe-btn hpe-btn-success">Save Vocabularies</button>
+                        <div id="vocab-status" class="vocabulary-status"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let selectedSlides = new Set({{ slide_ids|tojson }});
+        
+        function updateSelectedCount() {
+            const count = selectedSlides.size;
+            document.getElementById('selected-count').textContent = count;
+            document.getElementById('selected-count-bottom').textContent = count;
+        }
+        
+        function updateSlideAppearance(slideId, isSelected) {
+            const slideItem = document.querySelector(`[data-slide-id="${slideId}"]`);
+            if (isSelected) {
+                slideItem.classList.add('selected');
+            } else {
+                slideItem.classList.remove('selected');
+            }
+        }
+        
+        function selectAllSlides() {
+            document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                checkbox.checked = true;
+                selectedSlides.add(parseInt(checkbox.value));
+                updateSlideAppearance(parseInt(checkbox.value), true);
+            });
+            updateSelectedCount();
+        }
+        
+        function deselectAllSlides() {
+            document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                checkbox.checked = false;
+                selectedSlides.delete(parseInt(checkbox.value));
+                updateSlideAppearance(parseInt(checkbox.value), false);
+            });
+            updateSelectedCount();
+        }
+        
+        function saveSelection() {
+            const selectedIds = Array.from(selectedSlides);
+            
+            fetch('/slides/save-slide-selection', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    selected_ids: selectedIds
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`Selection saved! ${selectedIds.length} slides selected. The workflow will continue.`);
+                    // Close the window instead of redirecting
+                    window.close();
+                } else {
+                    alert('Error saving selection: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Error saving selection: ' + error.message);
+            });
+        }
+        
+        // Handle checkbox changes
+        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const slideId = parseInt(this.value);
+                if (this.checked) {
+                    selectedSlides.add(slideId);
+                } else {
+                    selectedSlides.delete(slideId);
+                }
+                updateSelectedCount();
+                updateSlideAppearance(slideId, this.checked);
+            });
+        });
+        
+        // Top controls
+        document.getElementById('select-all').addEventListener('click', selectAllSlides);
+        document.getElementById('deselect-all').addEventListener('click', deselectAllSlides);
+        document.getElementById('save-selection-top').addEventListener('click', saveSelection);
+        
+        // Bottom controls
+        document.getElementById('select-all-bottom').addEventListener('click', selectAllSlides);
+        document.getElementById('deselect-all-bottom').addEventListener('click', deselectAllSlides);
+        document.getElementById('save-selection-bottom').addEventListener('click', saveSelection);
+        
+        // Extract vocabulary functionality
+        document.getElementById('extract-vocab').addEventListener('click', function() {
+            const model = document.getElementById('vocab-model').value;
+            const button = this;
+            const resultDiv = document.getElementById('vocab-result');
+            const contentTextarea = document.getElementById('vocab-content');
+            const statusDiv = document.getElementById('vocab-status');
+            
+            button.disabled = true;
+            button.textContent = 'Extracting...';
+            statusDiv.textContent = 'Extracting vocabulary terms...';
+            resultDiv.classList.remove('hpe-hidden');
+            
+            fetch('/slides/extract-vocabulary-ajax', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model_id: model
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                button.disabled = false;
+                button.textContent = 'Extract Domain Vocabulary';
+                
+                if (data.success) {
+                    contentTextarea.value = data.vocabulary;
+                    statusDiv.textContent = 'Vocabulary extraction completed. You can edit the text above and save it.';
+                    statusDiv.style.color = 'green';
+                } else {
+                    contentTextarea.value = 'Error: ' + data.error;
+                    statusDiv.textContent = 'Vocabulary extraction failed.';
+                    statusDiv.style.color = 'red';
+                }
+            })
+            .catch(error => {
+                button.disabled = false;
+                button.textContent = 'Extract Domain Vocabulary';
+                contentTextarea.value = 'Error: ' + error.message;
+                statusDiv.textContent = 'Vocabulary extraction failed.';
+                statusDiv.style.color = 'red';
+            });
+        });
+        
+        // Save vocabulary functionality
+        document.getElementById('save-vocab').addEventListener('click', function() {
+            const vocabularyText = document.getElementById('vocab-content').value.trim();
+            const button = this;
+            const statusDiv = document.getElementById('vocab-status');
+            
+            if (!vocabularyText) {
+                alert('Please extract or enter vocabulary text first.');
+                return;
+            }
+            
+            button.disabled = true;
+            button.textContent = 'Saving...';
+            statusDiv.textContent = 'Saving vocabulary...';
+            
+            fetch('/slides/save-vocabulary', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    vocabulary: vocabularyText
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                button.disabled = false;
+                button.textContent = 'Save Vocabularies';
+                
+                if (data.success) {
+                    statusDiv.textContent = 'Vocabulary saved successfully to vocabulary.txt';
+                    statusDiv.style.color = 'green';
+                } else {
+                    statusDiv.textContent = 'Error saving vocabulary: ' + data.error;
+                    statusDiv.style.color = 'red';
+                }
+            })
+            .catch(error => {
+                button.disabled = false;
+                button.textContent = 'Save Vocabularies';
+                statusDiv.textContent = 'Error saving vocabulary: ' + error.message;
+                statusDiv.style.color = 'red';
+            });
+        });
+        
+        // Initialize slide appearances
+        selectedSlides.forEach(slideId => {
+            updateSlideAppearance(slideId, true);
+        });
+    </script>
+    {% endif %}
+</body>
+</html>

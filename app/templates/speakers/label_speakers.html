@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Label Speakers - Video2Notes</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/hpe-design.css') }}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #007cba;
+        }
+        .speaker-labeler-container {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 30px;
+        }
+        .progress-info {
+            margin-bottom: 30px;
+        }
+        .progress-info h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #007cba, #0056b3);
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+        .speaker-info {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .speaker-info h2 {
+            color: #007cba;
+            margin-bottom: 10px;
+        }
+        .audio-samples {
+            margin-bottom: 30px;
+        }
+        .speaker-segment {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .speaker-segment h4 {
+            color: #007cba;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        .speaker-segment p {
+            margin: 10px 0;
+            color: #666;
+        }
+        .speaker-segment audio {
+            width: 100%;
+            margin-top: 10px;
+        }
+        .speaker-form {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #007cba;
+            box-shadow: 0 0 0 2px rgba(0, 124, 186, 0.2);
+        }
+        .form-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: flex-end;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        .btn-primary {
+            background: #007cba;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .hint-text {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-top: 20px;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007cba;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎤 Speaker Labeler</h1>
+        <p>Listen to audio samples and label each speaker</p>
+    </div>
+
+    <div class="speaker-labeler-container">
+        <div class="progress-info">
+            <h3>Speaker {{ current_index + 1 }} of {{ total_speakers }}: {{ current_speaker }}</h3>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {{ (current_index / total_speakers * 100) }}%"></div>
+            </div>
+        </div>
+        
+        <div class="speaker-info">
+            <h2>{{ current_speaker }}</h2>
+            <p>Found {{ segments|length }} audio segments for this speaker.</p>
+        </div>
+        
+        <div class="audio-samples">
+            {% for segment in segments %}
+            <div class="speaker-segment">
+                <h4>Sample {{ loop.index }}</h4>
+                <p><strong>Timestamp:</strong> {{ segment.timestamp_str }}</p>
+                <audio controls>
+                    <source src="{{ url_for('speakers.play_speaker_audio', speaker_id=current_speaker, segment=loop.index0) }}" type="audio/mpeg">
+                    Your browser does not support the audio element.
+                </audio>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <form id="speaker-form" class="speaker-form">
+            <div class="form-group">
+                <label for="speaker-name">Speaker Name:</label>
+                <input type="text" 
+                       id="speaker-name" 
+                       name="speaker_name" 
+                       placeholder="Enter speaker name (e.g., John Smith)"
+                       autocomplete="off"
+                       autofocus>
+            </div>
+            <div class="form-buttons">
+                <button type="button" id="skip-speaker" class="btn btn-secondary">
+                    Skip This Speaker
+                </button>
+                <button type="submit" class="btn btn-primary" id="submit-btn">
+                    Save & Continue
+                </button>
+            </div>
+        </form>
+        
+        <p class="hint-text">
+            Tip: Press Enter to submit, or Tab then Enter to skip
+        </p>
+    </div>
+
+    <script>
+        let isSubmitting = false;
+        
+        // Handle form submission
+        document.getElementById('speaker-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            if (isSubmitting) return;
+            
+            const speakerName = document.getElementById('speaker-name').value.trim();
+            labelSpeaker(speakerName);
+        });
+        
+        // Handle skip button
+        document.getElementById('skip-speaker').addEventListener('click', function() {
+            if (isSubmitting) return;
+            labelSpeaker(''); // Empty name means skip
+        });
+        
+        // Keyboard shortcuts
+        document.getElementById('speaker-name').addEventListener('keydown', function(e) {
+            if (e.key === 'Tab' && e.shiftKey === false) {
+                // Allow default tab behavior
+                return;
+            }
+        });
+        
+        function labelSpeaker(name) {
+            if (isSubmitting) return;
+            isSubmitting = true;
+            
+            // Update button states
+            const submitBtn = document.getElementById('submit-btn');
+            const skipBtn = document.getElementById('skip-speaker');
+            const originalSubmitText = submitBtn.textContent;
+            
+            submitBtn.disabled = true;
+            skipBtn.disabled = true;
+            
+            if (name) {
+                submitBtn.innerHTML = 'Saving... <span class="loading"></span>';
+            } else {
+                skipBtn.innerHTML = 'Skipping... <span class="loading"></span>';
+            }
+            
+            fetch('{{ url_for("speakers.label_speaker") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    speaker_id: '{{ current_speaker }}',
+                    speaker_name: name
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.completed) {
+                        // Redirect to results page
+                        window.location.href = '{{ url_for("speakers.speaker_labeling_result") }}';
+                    } else {
+                        // Reload to show next speaker
+                        window.location.reload();
+                    }
+                } else {
+                    // Re-enable form on error
+                    isSubmitting = false;
+                    submitBtn.disabled = false;
+                    skipBtn.disabled = false;
+                    submitBtn.textContent = originalSubmitText;
+                    skipBtn.textContent = 'Skip This Speaker';
+                    alert('Error: ' + (data.error || 'Unknown error occurred'));
+                }
+            })
+            .catch(error => {
+                // Re-enable form on error
+                isSubmitting = false;
+                submitBtn.disabled = false;
+                skipBtn.disabled = false;
+                submitBtn.textContent = originalSubmitText;
+                skipBtn.textContent = 'Skip This Speaker';
+                alert('Error: ' + error.message);
+            });
+        }
+        
+        // Auto-focus on the input field
+        document.getElementById('speaker-name').focus();
+        
+        // Play first audio sample automatically (optional)
+        window.addEventListener('load', function() {
+            const firstAudio = document.querySelector('audio');
+            if (firstAudio) {
+                // Uncomment to auto-play first sample
+                // firstAudio.play().catch(e => console.log('Auto-play prevented:', e));
+            }
+        });
+    </script>
+</body>
+</html>

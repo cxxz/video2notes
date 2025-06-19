@@ -5,7 +5,6 @@ import os
 from dotenv import load_dotenv
 import argparse
 import re
-import pynvml
 import torch
 from pyannote.audio.models.blocks.pooling import StatsPool
 
@@ -32,6 +31,7 @@ def get_gpu_with_most_memory():
         return 0
     
     try:
+        import pynvml
         pynvml.nvmlInit()
     except Exception as e:
         logging.warning(f"Failed to initialize NVML: {e}. Falling back to GPU 0.")
@@ -162,6 +162,8 @@ def transcribe_audio(audio_file, save_dir, save_format, whisper_model, diarize_m
     #result = perform_alignment_and_diarization(result, audio, lang, device)
     if WHISPERX_DEVICE == "cuda":
         diarize_device = f"cuda:{WHISPERX_DEVICE_INDEX}"
+    else:
+        diarize_device = WHISPERX_DEVICE
     result = perform_alignment_and_diarization(result, audio, lang, diarize_device, diarize_model)
     
     # Save transcription based on output format

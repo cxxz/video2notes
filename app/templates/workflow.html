@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video2Notes - Workflow Progress</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/hpe-design.css') }}">
+    <style>
+        /* Page-specific overrides */
+        .status-section {
+            margin-bottom: var(--hpe-space-6);
+        }
+
+        .status-card {
+            background: var(--hpe-white);
+            border-radius: var(--hpe-radius-lg);
+            padding: var(--hpe-space-6);
+            margin-bottom: var(--hpe-space-5);
+            border-left: 5px solid var(--hpe-green);
+            box-shadow: var(--hpe-shadow-md);
+        }
+
+        .status-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: var(--hpe-gray-900);
+            margin-bottom: var(--hpe-space-4);
+            display: flex;
+            align-items: center;
+        }
+
+        .current-step {
+            font-size: 1.2rem;
+            color: var(--hpe-green);
+            font-weight: 600;
+            margin-bottom: var(--hpe-space-3);
+        }
+
+        .progress-text {
+            text-align: center;
+            font-weight: 600;
+            color: var(--hpe-gray-900);
+            margin-top: var(--hpe-space-2);
+        }
+
+        .interactive-section {
+            background: var(--hpe-alert-warning);
+            border: 1px solid #ffeaa7;
+            border-radius: var(--hpe-radius-lg);
+            padding: var(--hpe-space-5);
+            margin: var(--hpe-space-5) 0;
+            text-align: center;
+        }
+
+        .interactive-section h3 {
+            color: #856404;
+            margin-bottom: var(--hpe-space-4);
+        }
+
+        .interactive-section p {
+            color: #856404;
+            margin-bottom: var(--hpe-space-4);
+        }
+
+        .interactive-btn {
+            background: linear-gradient(135deg, var(--hpe-green) 0%, var(--hpe-blue) 100%);
+            color: var(--hpe-white);
+            border: none;
+            padding: var(--hpe-space-4) var(--hpe-space-6);
+            border-radius: var(--hpe-radius-md);
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            margin: var(--hpe-space-3);
+            text-decoration: none;
+            display: inline-block;
+            font-weight: 600;
+        }
+
+        .interactive-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--hpe-shadow-md);
+            color: var(--hpe-white);
+        }
+
+        .interactive-btn:disabled {
+            background: var(--hpe-gray-400);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .completion-section {
+            background: var(--hpe-alert-success);
+            border: 1px solid #c3e6cb;
+            border-radius: var(--hpe-radius-lg);
+            padding: var(--hpe-space-5);
+            margin: var(--hpe-space-5) 0;
+            text-align: center;
+        }
+
+        .completion-section h3 {
+            color: #155724;
+            margin-bottom: var(--hpe-space-4);
+        }
+
+        .completion-section p {
+            color: #155724;
+            margin-bottom: var(--hpe-space-4);
+        }
+
+        .download-links {
+            margin: var(--hpe-space-4) 0;
+        }
+
+        .download-btn {
+            background: var(--hpe-success);
+            color: var(--hpe-white);
+            text-decoration: none;
+            padding: var(--hpe-space-3) var(--hpe-space-5);
+            border-radius: var(--hpe-radius-md);
+            margin: var(--hpe-space-2);
+            display: inline-block;
+            font-weight: 500;
+            transition: transform 0.2s ease;
+        }
+
+        .download-btn:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: var(--hpe-shadow-md);
+            color: var(--hpe-white);
+        }
+
+        .error-section {
+            background: var(--hpe-alert-danger);
+            border: 1px solid #f5c6cb;
+            border-radius: var(--hpe-radius-lg);
+            padding: var(--hpe-space-5);
+            margin: var(--hpe-space-5) 0;
+            text-align: center;
+        }
+
+        .error-section h3 {
+            color: #721c24;
+            margin-bottom: var(--hpe-space-4);
+        }
+
+        .error-section p {
+            color: #721c24;
+            margin-bottom: var(--hpe-space-4);
+        }
+
+        .logs-section {
+            margin-top: var(--hpe-space-6);
+        }
+
+        .logs-section h3 {
+            color: var(--hpe-gray-900);
+            margin-bottom: var(--hpe-space-4);
+        }
+
+        .controls {
+            margin-top: var(--hpe-space-5);
+            text-align: center;
+        }
+
+        .control-btn {
+            background: var(--hpe-danger);
+            color: var(--hpe-white);
+            border: none;
+            padding: var(--hpe-space-3) var(--hpe-space-5);
+            border-radius: var(--hpe-radius-md);
+            cursor: pointer;
+            margin: 0 var(--hpe-space-3);
+            font-weight: 500;
+            transition: transform 0.2s ease;
+        }
+
+        .control-btn:hover {
+            background: #c82333;
+            transform: translateY(-2px);
+            box-shadow: var(--hpe-shadow-md);
+        }
+
+        .control-btn.secondary {
+            background: var(--hpe-gray-600);
+        }
+
+        .control-btn.secondary:hover {
+            background: var(--hpe-gray-700);
+        }
+    </style>
+</head>
+<body class="hpe-page-wrapper">
+    <div class="hpe-container">
+        <div class="hpe-header">
+            <h1>🎥 Video2Notes Workflow</h1>
+            <p>Processing your video...</p>
+        </div>
+
+        <!-- Status Section -->
+        <div class="status-section">
+            <div class="status-card">
+                <div class="status-title">
+                    <span id="status-indicator" class="hpe-status-indicator hpe-status-idle"></span>
+                    Workflow Status: <span id="status-text">Starting...</span>
+                </div>
+                
+                <div class="current-step" id="current-step">Initializing...</div>
+                
+                <div class="hpe-progress">
+                    <div class="hpe-progress-bar" id="progress-bar" style="width: 0%"></div>
+                </div>
+                <div class="progress-text">
+                    <span id="progress-text">0%</span> Complete
+                </div>
+            </div>
+        </div>
+
+        <!-- Interactive Section (shown when needed) -->
+        <div class="interactive-section hpe-hidden" id="interactive-section">
+            <h3 id="interactive-title">Interactive Step Required</h3>
+            <p id="interactive-description">Please complete the interactive step to continue.</p>
+            <div id="interactive-buttons">
+                <a href="/workflow/open_slides" target="_blank" class="interactive-btn hpe-hidden" id="slides-btn">
+                    🖼️ Open Slide Selector
+                </a>
+                <a href="/workflow/open_speakers" target="_blank" class="interactive-btn hpe-hidden" id="speakers-btn">
+                    🎤 Open Speaker Labeler
+                </a>
+            </div>
+        </div>
+
+        <!-- Completion Section -->
+        <div class="completion-section hpe-hidden" id="completion-section">
+            <h3>🎉 Workflow Completed Successfully!</h3>
+            <p>Your video has been processed and notes have been generated.</p>
+            <div class="download-links" id="download-links">
+                <!-- Download links will be populated by JavaScript -->
+            </div>
+            <a href="/" class="interactive-btn">🔄 Process Another Video</a>
+        </div>
+
+        <!-- Error Section -->
+        <div class="error-section hpe-hidden" id="error-section">
+            <h3>❌ Workflow Failed</h3>
+            <p>An error occurred during processing. Please check the logs below for details.</p>
+            <a href="/" class="interactive-btn">🔄 Try Again</a>
+        </div>
+
+        <!-- Logs Section -->
+        <div class="logs-section">
+            <h3>📋 Process Logs</h3>
+            <div class="hpe-terminal" id="logs-container">
+                <div class="hpe-log-entry">Waiting for workflow to start...</div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <button class="control-btn" id="stop-btn" onclick="stopWorkflow()">🛑 Stop Workflow</button>
+            <button class="control-btn secondary" onclick="clearLogs()">🗑️ Clear Logs</button>
+        </div>
+    </div>
+
+    <script>
+        let eventSource;
+        let autoScroll = true;
+        let firstLogCleared = false;
+
+        // Helper function to format time in 24-hour format (HH:MM:SS) to match server-side logs
+        function formatTime24Hour(date) {
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            const seconds = date.getSeconds().toString().padStart(2, '0');
+            return `${hours}:${minutes}:${seconds}`;
+        }
+
+        function initializeEventSource() {
+            console.log('Initializing EventSource connection...');
+            eventSource = new EventSource('/workflow/progress_stream');
+            
+            eventSource.onopen = function(event) {
+                console.log('EventSource connection opened', event);
+            };
+            
+            eventSource.onmessage = function(event) {
+                console.log('Received SSE data:', event.data);
+                try {
+                    const data = JSON.parse(event.data);
+                    updateProgress(data);
+                } catch (error) {
+                    console.error('Error parsing SSE data:', error, event.data);
+                }
+            };
+            
+            eventSource.onerror = function(event) {
+                console.error('EventSource error:', event);
+                console.log('EventSource readyState:', eventSource.readyState);
+                
+                if (eventSource.readyState === EventSource.CLOSED) {
+                    console.log('EventSource connection closed, attempting to reconnect...');
+                    setTimeout(initializeEventSource, 5000); // Reconnect after 5 seconds
+                } else if (eventSource.readyState === EventSource.CONNECTING) {
+                    console.log('EventSource is connecting...');
+                }
+            };
+        }
+
+        function updateProgress(data) {
+            // Update status
+            const statusText = document.getElementById('status-text');
+            const statusIndicator = document.getElementById('status-indicator');
+            const currentStep = document.getElementById('current-step');
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            
+            statusText.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+            currentStep.textContent = data.current_step || 'Waiting...';
+            progressBar.style.width = data.progress + '%';
+            progressText.textContent = data.progress + '%';
+            
+            // Update status indicator
+            statusIndicator.className = 'hpe-status-indicator hpe-status-' + data.status;
+            
+            // Add new log entries
+            if (data.new_logs && data.new_logs.length > 0) {
+                const logsContainer = document.getElementById('logs-container');
+                
+                // Clear the initial placeholder message on first real log
+                if (!firstLogCleared) {
+                    logsContainer.innerHTML = '';
+                    firstLogCleared = true;
+                }
+                
+                data.new_logs.forEach(log => {
+                    const logEntry = document.createElement('div');
+                    logEntry.className = 'hpe-log-entry';
+                    
+                    // Style based on content
+                    if (log.includes('✅')) {
+                        logEntry.classList.add('success');
+                    } else if (log.includes('❌') || log.includes('💥')) {
+                        logEntry.classList.add('error');
+                    } else if (log.includes('🖱️') || log.includes('🎤')) {
+                        logEntry.classList.add('warning');
+                    } else {
+                        logEntry.classList.add('info');
+                    }
+                    
+                    logEntry.textContent = log;
+                    logsContainer.appendChild(logEntry);
+                });
+                
+                // Auto-scroll to bottom
+                if (autoScroll) {
+                    logsContainer.scrollTop = logsContainer.scrollHeight;
+                }
+            }
+            
+            // Handle interactive stages
+            handleInteractiveStage(data);
+            
+            // Handle completion
+            if (data.status === 'completed') {
+                showCompletionSection();
+                if (eventSource) {
+                    eventSource.close();
+                }
+            } else if (data.status === 'error') {
+                showErrorSection();
+                if (eventSource) {
+                    eventSource.close();
+                }
+            }
+        }
+
+        function handleInteractiveStage(data) {
+            const interactiveSection = document.getElementById('interactive-section');
+            const interactiveTitle = document.getElementById('interactive-title');
+            const interactiveDescription = document.getElementById('interactive-description');
+            const slidesBtn = document.getElementById('slides-btn');
+            const speakersBtn = document.getElementById('speakers-btn');
+            
+            if (data.interactive_stage && data.interactive_ready) {
+                interactiveSection.classList.remove('hpe-hidden');
+                
+                if (data.interactive_stage === 'slides') {
+                    interactiveTitle.textContent = '🖼️ Slide Selection Required';
+                    interactiveDescription.textContent = 'The slide selector will open automatically in a new tab. Please select the relevant slides to continue with the workflow. If the tab doesn\'t open, click the button below.';
+                    slidesBtn.classList.remove('hpe-hidden');
+                    speakersBtn.classList.add('hpe-hidden');
+                    
+                    // Auto-open slide selector if not already opened
+                    if (!window.slidesSelectorOpened) {
+                        window.slidesSelectorOpened = true;
+                        setTimeout(() => {
+                            window.open('/workflow/open_slides', '_blank');
+                            // Add notification that tab was opened
+                            const logsContainer = document.getElementById('logs-container');
+                            const logEntry = document.createElement('div');
+                            logEntry.className = 'hpe-log-entry warning';
+                            logEntry.textContent = '[' + formatTime24Hour(new Date()) + '] 🔄 Automatically opened slide selector in new tab';
+                            logsContainer.appendChild(logEntry);
+                            logsContainer.scrollTop = logsContainer.scrollHeight;
+                        }, 1000); // Small delay to ensure the UI is ready
+                    }
+                } else if (data.interactive_stage === 'speakers') {
+                    interactiveTitle.textContent = '🎤 Speaker Labeling Required';
+                    interactiveDescription.textContent = 'The speaker labeler will open automatically in a new tab. Please label the speakers in your transcript. If the tab doesn\'t open, click the button below.';
+                    slidesBtn.classList.add('hpe-hidden');
+                    speakersBtn.classList.remove('hpe-hidden');
+                    
+                    // Auto-open speaker labeler if not already opened
+                    if (!window.speakerLabelerOpened) {
+                        window.speakerLabelerOpened = true;
+                        setTimeout(() => {
+                            window.open('/workflow/open_speakers', '_blank');
+                            // Add notification that tab was opened
+                            const logsContainer = document.getElementById('logs-container');
+                            const logEntry = document.createElement('div');
+                            logEntry.className = 'hpe-log-entry warning';
+                            logEntry.textContent = '[' + formatTime24Hour(new Date()) + '] 🔄 Automatically opened speaker labeler in new tab';
+                            logsContainer.appendChild(logEntry);
+                            logsContainer.scrollTop = logsContainer.scrollHeight;
+                        }, 1000); // Small delay to ensure the UI is ready
+                    }
+                }
+            } else {
+                interactiveSection.classList.add('hpe-hidden');
+                slidesBtn.classList.add('hpe-hidden');
+                speakersBtn.classList.add('hpe-hidden');
+                
+                // Reset the opened flags when interactive stage ends
+                if (data.interactive_stage === null) {
+                    window.slidesSelectorOpened = false;
+                    window.speakerLabelerOpened = false;
+                }
+            }
+        }
+
+        function showCompletionSection() {
+            const completionSection = document.getElementById('completion-section');
+            const downloadLinks = document.getElementById('download-links');
+            
+            completionSection.classList.remove('hpe-hidden');
+            
+            // Get the current status to find available files
+            fetch('/workflow/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.available_files && data.available_files.length > 0) {
+                        const links = data.available_files.map(file => 
+                            `<a href="/download/${encodeURIComponent(file.filename)}" class="download-btn" title="${file.description}">${file.icon} Download ${file.name}</a>`
+                        ).join('\n                ');
+                        
+                        downloadLinks.innerHTML = links;
+                    } else {
+                        // Fallback to generic links if no specific files are found
+                        downloadLinks.innerHTML = `
+                            <p style="color: var(--hpe-gray-600); font-style: italic;">No downloadable files found. Please check the output directory manually.</p>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching available files:', error);
+                    // Fallback to generic message
+                    downloadLinks.innerHTML = `
+                        <p style="color: var(--hpe-danger);">Error loading download links. Please check the logs or contact support.</p>
+                    `;
+                });
+        }
+
+        function showErrorSection() {
+            document.getElementById('error-section').classList.remove('hpe-hidden');
+        }
+
+        function stopWorkflow() {
+            if (confirm('Are you sure you want to stop the workflow?')) {
+                fetch('/workflow/stop', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const logsContainer = document.getElementById('logs-container');
+                            const logEntry = document.createElement('div');
+                            logEntry.className = 'hpe-log-entry warning';
+                            logEntry.textContent = '[' + formatTime24Hour(new Date()) + '] 🛑 Workflow stopped by user';
+                            logsContainer.appendChild(logEntry);
+                            logsContainer.scrollTop = logsContainer.scrollHeight;
+                        }
+                    })
+                    .catch(error => console.error('Error stopping workflow:', error));
+            }
+        }
+
+        function clearLogs() {
+            const logsContainer = document.getElementById('logs-container');
+            logsContainer.innerHTML = '<div class="hpe-log-entry">Logs cleared...</div>';
+        }
+
+        // Toggle auto-scroll
+        document.getElementById('logs-container').addEventListener('scroll', function() {
+            const container = this;
+            autoScroll = (container.scrollTop + container.clientHeight >= container.scrollHeight - 10);
+        });
+
+        // Fallback check for completion in case SSE fails
+        function checkCompletionFallback() {
+            fetch('/workflow/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'completed') {
+                        const completionSection = document.getElementById('completion-section');
+                        if (completionSection.classList.contains('hpe-hidden')) {
+                            console.log('Fallback: Detected completed workflow, showing completion section');
+                            showCompletionSection();
+                        }
+                    }
+                })
+                .catch(error => console.error('Fallback check error:', error));
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', function() {
+            initializeEventSource();
+            
+            // Set up fallback check every 10 seconds (less frequent to reduce log noise)
+            setInterval(checkCompletionFallback, 10000);
+        });
+
+        // Clean up when page unloads
+        window.addEventListener('beforeunload', function() {
+            if (eventSource) {
+                eventSource.close();
+            }
+        });
+    </script>
+</body>
+</html>
