@@ -75,7 +75,7 @@ def get_server_host():
     
     return host
 
-MAIN_APP_PORT = os.getenv('MAIN_APP_PORT', 5001)
+MAIN_APP_PORT = os.getenv('MAIN_APP_PORT', 5100)
 
 # Ensure upload directory exists
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -402,13 +402,22 @@ def run_workflow():
         workflow_state['audio_path'] = audio_path
         transcript_dir = os.path.join(output_dir, "transcript")
         os.makedirs(transcript_dir, exist_ok=True)
-        
-        if not execute_command(
-            ["python", "03-transcribe.py",
+
+        transcript_command = ["python", "03-transcribe.py",
              "-a", audio_path,
              "-s", slides_dir,
              "-o", transcript_dir,
-             "-f", "json"],
+             "-f", "json"]
+
+        whisper_model = os.getenv('LOCAL_WHISPER_MODEL', None)
+        if whisper_model:
+            transcript_command.extend(["--whisper_model", whisper_model])
+        diarize_model = os.getenv('LOCAL_DIARIZE_MODEL', None)
+        if diarize_model:
+            transcript_command.extend(["--diarize_model", diarize_model])
+
+        if not execute_command(
+            transcript_command,
             "Transcribing audio"
         ):
             raise Exception("Audio transcription failed")
@@ -468,11 +477,22 @@ def run_workflow():
             workflow_state['current_step'] = 'Refining notes'
             workflow_state['progress'] = 90
             
-            if not execute_command(
-                ["python", "06-refine-notes.py",
+            refine_notes_command = ["python", "06-refine-notes.py",
                  "-i", notes_for_refinement,
-                 "-o", output_dir],
-                "Refining notes"
+                 "-o", output_dir]
+            
+            # Use the selected model from the form, fallback to environment variable, then to default
+            refine_notes_llm = params.get('refine_notes_llm') or os.getenv('REFINE_NOTES_LLM', 'openai/gpt-4o-2024-08-06')
+
+            if refine_notes_llm:
+                refine_notes_command.extend(["-m", refine_notes_llm])
+                log_message(f"🤖 Using LLM model for note refinement: {refine_notes_llm}")
+            else:
+                log_message("⚠️ No LLM model specified, using default model")
+
+            if not execute_command(
+                refine_notes_command,
+                "Refining notes with AI"
             ):
                 raise Exception("Note refinement failed")
         
@@ -491,7 +511,7 @@ def run_workflow():
 @app.route('/browse_files')
 def browse_files():
     """Browse files and directories on the server"""
-    path = request.args.get('path', os.path.expanduser('~'))
+    path = request.args.get('path', app.config['UPLOAD_FOLDER'])
     
     # Security check
     if not is_safe_path(path):
@@ -559,12 +579,14 @@ def browse_files():
 @app.route('/get_initial_browse_path')
 def get_initial_browse_path():
     """Get the initial path for file browsing"""
-    # Try user home directory first, then fall back to upload folder
-    home_dir = os.path.expanduser('~')
-    if is_safe_path(home_dir) and os.path.exists(home_dir):
-        return jsonify({'path': home_dir})
+    # Use upload folder as the default initial path
+    upload_dir = app.config['UPLOAD_FOLDER']
+    if is_safe_path(upload_dir) and os.path.exists(upload_dir):
+        return jsonify({'path': upload_dir})
     else:
-        return jsonify({'path': app.config['UPLOAD_FOLDER']})
+        # Fall back to home directory if upload folder doesn't exist
+        home_dir = os.path.expanduser('~')
+        return jsonify({'path': home_dir})
 
 @app.route('/')
 def index():
@@ -622,12 +644,14 @@ def start_workflow():
         'skip_roi': request.form.get('skip_roi', 'on') == 'on',
         'roi_timestamp': request.form.get('roi_timestamp', '').strip(),
         'do_label_speakers': request.form.get('do_label_speakers', 'on') == 'on',
-        'do_refine_notes': request.form.get('do_refine_notes') == 'on'
+        'do_refine_notes': request.form.get('do_refine_notes') == 'on',
+        'refine_notes_llm': request.form.get('refine_notes_llm', '').strip()
     }
     
     # Debug logging
     app.logger.info(f"Input method: '{input_method}'")
     app.logger.info(f"Final video_path: '{params['video_path']}'")
+    app.logger.info(f"Refine notes LLM: '{params['refine_notes_llm']}'")
     app.logger.info(f"All form fields: {dict(request.form)}")
     
     # Validation
@@ -652,6 +676,16 @@ def start_workflow():
             params['roi_timestamp'] = float(params['roi_timestamp'])
         except ValueError:
             return jsonify({'error': 'Invalid ROI timestamp'}), 400
+    
+    # Validate refine notes LLM model if specified
+    if params.get('do_refine_notes') and params.get('refine_notes_llm'):
+        allowed_models = [
+            'openai/gpt-4o-2024-08-06',
+            'bedrock/claude-4-sonnet',
+            'openai/gpt-4.1-mini',
+        ]
+        if params['refine_notes_llm'] not in allowed_models:
+            return jsonify({'error': f'Invalid LLM model selection: {params["refine_notes_llm"]}'}), 400
     
     workflow_state['parameters'] = params
     
@@ -1122,8 +1156,8 @@ def select_slides_index():
         <div class="vocabulary-controls">
             <label for="model" class="hpe-label">Model:</label>
             <select id="model" class="hpe-select" style="max-width: 300px;">
+                <option value="openai/gpt-4o-2024-08-06">GPT-4o</option>
                 <option value="bedrock/claude-4-sonnet">Claude 4 Sonnet</option>
-                <option value="openai/gpt-4o">GPT-4o</option>
             </select>
             <button type="button" class="hpe-btn hpe-btn-secondary" onclick="extractVocabulary()">🔤 Extract Vocabulary</button>
         </div>
@@ -1221,7 +1255,7 @@ def save_slide_selection():
         <h3>🎉 Selection Saved Successfully!</h3>
         <p><strong>{len(pruned)} slides</strong> have been selected and saved.</p>
         <p>You can now close this tab and return to the main workflow.</p>
-        <a href="/" class="hpe-btn hpe-btn-primary hpe-mt-4">🔄 Process Another Video</a>
+        <button onclick="window.close()" class="hpe-btn hpe-btn-primary hpe-mt-4">❌ Close this page (check with your workflow)</button>
     </div>
     """
     
@@ -1703,7 +1737,7 @@ def speaker_labeling_result():
             
             <div class="hpe-text-center hpe-mt-6">
                 <p class="hpe-mb-4">You can now close this tab and return to the main workflow.</p>
-                <a href="/" class="hpe-btn hpe-btn-primary hpe-btn-lg">🏠 Return to Main Page</a>
+                <button onclick="window.close()" class="hpe-btn hpe-btn-primary hpe-btn-lg">❌ Close this page (check with your workflow)</button>
             </div>
         </div>
     </body>

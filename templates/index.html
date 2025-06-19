@@ -267,10 +267,22 @@
                 <div class="help-text">Interactive web interface to assign names to speakers</div>
                 
                 <div class="hpe-checkbox hpe-mt-4">
-                    <input type="checkbox" id="do_refine_notes" name="do_refine_notes">
+                    <input type="checkbox" id="do_refine_notes" name="do_refine_notes" onchange="toggleRefineNotesOptions()">
                     <label for="do_refine_notes">Refine notes with AI</label>
                 </div>
                 <div class="help-text">Use Large Language Models to improve note structure and clarity</div>
+                
+                <div id="refine-notes-options" class="hpe-mt-3" style="display: none; margin-left: var(--hpe-space-4);">
+                    <label for="refine_notes_llm" class="hpe-label">AI Model:</label>
+                    <select id="refine_notes_llm" name="refine_notes_llm" class="hpe-select" style="max-width: 300px;">
+                        <option value="openai/gpt-4o-2024-08-06">GPT-4o</option>
+                        <option value="bedrock/claude-4-sonnet">Claude 4 Sonnet</option>
+                        <option value="openai/gpt-4.1-mini">GPT-4.1-Mini (OpenAI)</option>
+                    </select>
+                    <div class="help-text" style="margin-top: var(--hpe-space-2); font-size: 0.85rem;">
+                        Choose the AI model to use for refining notes. Different models may produce varying results in terms of style and quality.
+                    </div>
+                </div>
             </div>
 
             <button type="submit" class="hpe-btn hpe-btn-primary hpe-btn-lg hpe-btn-block">
@@ -611,6 +623,13 @@
                 closeFileBrowser();
             }
         });
+
+        // Toggle refine notes options visibility
+        function toggleRefineNotesOptions() {
+            const checkbox = document.getElementById('do_refine_notes');
+            const options = document.getElementById('refine-notes-options');
+            options.style.display = checkbox.checked ? 'block' : 'none';
+        }
     </script>
 </body>
 </html> 
