@@ -78,8 +78,7 @@ FLASK_SECRET_KEY=your_secret_key
 
 ```bash
 # Generate authentication session
-npm install -g playwright
-npx playwright codegen --save-storage=sharepoint_session.json
+playwright codegen --save-storage=sharepoint_session.json
 # Log into SharePoint in the browser that opens
 # Close browser when done
 ```

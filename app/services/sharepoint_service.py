@@ -30,6 +30,7 @@ class SharePointService:
             downloader = SharePointDownloader(
                 sharepoint_url=sharepoint_url,
                 output_dir=self.upload_folder
+                # headless=False # For debugging
             )
             
             # Get video files from SharePoint

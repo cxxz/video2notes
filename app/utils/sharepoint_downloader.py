@@ -93,9 +93,9 @@ class SharePointDownloader:
             if not rows:
                 raise ValueError("No files found in the folder.")
 
-            # Save the rows to a json file
-            with open("rows.json", "w") as f:
-                json.dump(rows, f, indent=4)
+            # Save the rows to a json file, For debugging
+            # with open("rows.json", "w") as f:
+            #     json.dump(rows, f, indent=4)
 
             # Sort rows by Modified. field in descending order (newest first)
             rows.sort(key=self._parse_modified_date, reverse=True)
