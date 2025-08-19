@@ -69,14 +69,16 @@ class SharePointDownloader:
             
             def handle_response(response):
                 nonlocal captured_response
-                if "GetListUsingPath(DecodedUrl=@a1)" in response.url and "recordings" in response.url and response.request.method == "POST":
+                if "GetListUsingPath(DecodedUrl=@a1)" in response.url and "RootFolder" in response.url and response.request.method == "POST":
                     captured_response = response
                     print(f"Captured response from {response.url}")
             
             page.on("response", handle_response)
             
             page.goto(self.sharepoint_url)
-            
+            page.get_by_role("button", name="Modified(UTC-08:00) Pacific").click()
+            page.get_by_role("menuitemcheckbox", name="Newer to older").click()
+
             # Wait for the POST request to be captured
             page.wait_for_timeout(5000)  # Wait up to 5 seconds
             
