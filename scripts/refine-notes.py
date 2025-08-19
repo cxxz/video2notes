@@ -20,21 +20,47 @@ def read_markdown_file(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         return file.read()
 
-# Truncate the text into chunks based on character length and ensure each starts with '**SPEAKER'
+# Truncate the text into chunks based on character length and ensure each starts with a speaker header
+# Speaker header format examples:
+# **Name [mm:ss.mmm]:**
+# **Name [hh:mm:ss.mmm]:**
 def chunk_transcript(text, min_chars=2000, max_chars=3000):
     chunks = []
-    speakers = re.split(r'(?=\*\*SPEAKER)', text)  # Split by speaker section
+    # Regex to match lines like: **Name [mm:ss.mmm]:** or **Name [hh:mm:ss.mmm]:** at the start of a line
+    speaker_header_regex = re.compile(r'(?m)^\*\*[^*\n]+?\s*\[(?:\d{1,2}:)?\d{2}:\d{2}\.\d{3}\]:\*\*')
 
+    # Find all speaker header positions
+    matches = list(speaker_header_regex.finditer(text))
+    if not matches:
+        # Fallback: no headers found, return the whole text as one chunk honoring max_chars
+        return [text[i:i+max_chars] for i in range(0, len(text), max_chars)] if max_chars else [text]
+
+    # Build segments that each start with a header; preserve any preamble before the first header
+    segments = []
+    for idx, match in enumerate(matches):
+        start = match.start()
+        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
+        segments.append(text[start:end])
+
+    # Prepend any preamble (e.g., images) to the first segment to avoid losing content
+    preamble_start = 0
+    first_header_start = matches[0].start()
+    if first_header_start > preamble_start:
+        preamble = text[preamble_start:first_header_start]
+        if segments:
+            segments[0] = preamble + segments[0]
+
+    # Aggregate segments into size-bounded chunks
     current_chunk = ""
-    for speaker_text in speakers:
-        if len(current_chunk) + len(speaker_text) < max_chars:
-            current_chunk += speaker_text
+    for segment in segments:
+        if len(current_chunk) + len(segment) < max_chars:
+            current_chunk += segment
         else:
             if len(current_chunk) > min_chars:
                 chunks.append(current_chunk)
-                current_chunk = speaker_text
+                current_chunk = segment
             else:
-                current_chunk += speaker_text  # Merge if still below min_chars
+                current_chunk += segment  # Merge if still below min_chars
 
     if current_chunk:
         chunks.append(current_chunk)

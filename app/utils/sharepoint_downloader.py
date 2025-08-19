@@ -76,8 +76,10 @@ class SharePointDownloader:
             page.on("response", handle_response)
             
             page.goto(self.sharepoint_url)
-            page.get_by_role("button", name="Modified(UTC-08:00) Pacific").click()
-            page.get_by_role("menuitemcheckbox", name="Newer to older").click()
+            # page.get_by_role("button", name="Modified(UTC-08:00) Pacific").click()
+            # page.get_by_role("menuitemcheckbox", name="Newer to older").click()
+            page.get_by_role("button", name="Modified By").click()
+            page.get_by_role("menuitemcheckbox", name="A to Z").click()
 
             # Wait for the POST request to be captured
             page.wait_for_timeout(5000)  # Wait up to 5 seconds
