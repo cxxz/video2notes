@@ -38,13 +38,12 @@ class Config:
     # AI/ML Model configuration
     LOCAL_WHISPER_MODEL = os.getenv('LOCAL_WHISPER_MODEL')
     LOCAL_DIARIZE_MODEL = os.getenv('LOCAL_DIARIZE_MODEL')
-    REFINE_NOTES_LLM = os.getenv('REFINE_NOTES_LLM', 'openai/gpt-4o-2024-08-06')
+    REFINE_NOTES_LLM = os.getenv('REFINE_NOTES_LLM', 'openai/gpt-oss-120b')
     
     # Allowed LLM models for note refinement
     ALLOWED_LLM_MODELS: List[str] = [
-        'openai/gpt-4o-2024-08-06',
+        'openai/gpt-oss-120b',
         'bedrock/claude-4-sonnet',
-        'openai/gpt-4.1-mini',
     ]
     
     # File cleanup configuration
