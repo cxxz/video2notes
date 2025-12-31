@@ -3,6 +3,7 @@ Workflow service for orchestrating the Video2Notes workflow.
 """
 import os
 import time
+import shutil
 import threading
 from datetime import datetime
 from typing import Dict, Any, Optional
@@ -127,15 +128,52 @@ class WorkflowService:
                 if not notes_path:
                     raise Exception("Note generation failed")
                 
-                # Step 6: Label speakers (optional)
-                if params.do_label_speakers:
+                # Step 6 & 7: Speaker labeling and/or note refinement
+                # Handle three modes: parallel, labeling-only, or refinement-only
+                if params.do_refine_notes and params.do_label_speakers:
+                    # PARALLEL MODE: Run refinement in background while user labels speakers
+                    self._log_message("🔄 Starting parallel processing: AI enhancement + Speaker labeling")
+
+                    # Start refinement in background thread (uses raw notes with SPEAKER_XX)
+                    self.workflow_state.refinement_complete = False
+                    self.workflow_state.refined_notes_path = None
+                    refinement_thread = threading.Thread(
+                        target=self._refine_notes_thread,
+                        args=(notes_path, output_dir, params.refine_notes_llm)
+                    )
+                    refinement_thread.daemon = True
+                    refinement_thread.start()
+                    self.workflow_state.refinement_thread = refinement_thread
+
+                    # Handle speaker labeling interactively (blocking wait for user)
+                    self._handle_speaker_labeling(audio_path, notes_path)
+
+                    # Wait for refinement thread to complete if still running
+                    if refinement_thread.is_alive():
+                        self._log_message("⏳ Waiting for AI enhancement to complete...")
+                        refinement_thread.join()
+
+                    # Apply speaker labels to the refined transcript
+                    refined_path = self.workflow_state.refined_notes_path
+                    if refined_path and os.path.exists(refined_path):
+                        self._log_message("✨ Applying speaker names to refined transcript...")
+                        final_refined_path = refined_path.replace(".md", "_with_speakernames.md")
+                        if self.speaker_service.apply_speaker_labels_to_file(refined_path, final_refined_path):
+                            self._log_message(f"✅ Final refined transcript with speaker names: {final_refined_path}")
+                        else:
+                            self._log_message("⚠️ Failed to apply speaker names to refined transcript")
+                    else:
+                        self._log_message("⚠️ Refined transcript not found, skipping speaker name application")
+
+                elif params.do_label_speakers:
+                    # SEQUENTIAL MODE: Only speaker labeling (no refinement)
                     notes_path = self._handle_speaker_labeling(audio_path, notes_path) or notes_path
-                
-                # Step 7: Refine notes (optional)
-                if params.do_refine_notes:
+
+                elif params.do_refine_notes:
+                    # SEQUENTIAL MODE: Only refinement (no speaker labeling)
                     if not self._refine_notes(notes_path, output_dir, params.refine_notes_llm):
                         raise Exception("Note refinement failed")
-                
+
                 # Workflow completed
                 self.workflow_state.current_step = 'Completed'
                 self.workflow_state.progress = 100
@@ -213,18 +251,60 @@ class WorkflowService:
         
         return success
     
+    def _auto_select_all_slides(self) -> bool:
+        """Automatically select all slides and generate vocabulary using LLM."""
+        slides_dir = self.workflow_state.slides_dir
+        original_slides_json = os.path.join(slides_dir, "slides_original.json")
+        slides_json = os.path.join(slides_dir, "slides.json")
+
+        try:
+            # Copy original slides.json back (select all slides)
+            if os.path.exists(original_slides_json):
+                shutil.copy2(original_slides_json, slides_json)
+                self._log_message("✅ Auto-selected all slides")
+            else:
+                self._log_message("⚠️ No slides_original.json found, skipping auto-selection")
+                return True
+
+            # Extract vocabulary using LLM
+            self._log_message("🤖 Extracting vocabulary using AI...")
+            model_id = current_app.config.get('VOCABULARY_LLM', 'azure/gpt-5.1')
+            result = self.slide_service.extract_vocabulary(model_id)
+
+            if result['success']:
+                vocabulary_text = result['vocabulary']
+                save_result = self.slide_service.save_vocabulary(vocabulary_text)
+                if save_result['success']:
+                    self._log_message(f"✅ Vocabulary saved to: {save_result['file_path']}")
+                else:
+                    self._log_message(f"⚠️ Failed to save vocabulary: {save_result.get('error', 'Unknown error')}")
+            else:
+                self._log_message(f"⚠️ Vocabulary extraction failed: {result.get('error', 'Unknown error')}")
+
+            return True
+
+        except Exception as e:
+            self._log_message(f"⚠️ Error in auto slide selection: {str(e)}")
+            return False
+
     def _handle_slide_selection(self) -> bool:
         """Handle slide selection interactive stage."""
         slides_dir = self.workflow_state.slides_dir
         slides_json = os.path.join(slides_dir, "slides.json")
-        
-        # Wait for slide selection
+        params = self.workflow_state.parameters
+
+        # Check if auto-selection is enabled (skip manual selection)
+        if params.skip_slide_selection:
+            self._log_message("⏭️ Skip slide selection enabled - auto-selecting all slides")
+            return self._auto_select_all_slides()
+
+        # Manual slide selection mode - wait for user interaction
         self.workflow_state.interactive_stage = InteractiveStage.SLIDES
         self.workflow_state.interactive_ready = True
         self._log_message("🖱️ Slide selection interface is ready")
         self._log_message("Please use the 'Open Slide Selector' button to select slides")
         self._log_message("⏳ Workflow paused - waiting for slide selection...")
-        
+
         # Wait for slides to be selected (user creates new slides.json)
         self._log_message(f"Waiting for slides.json at: {slides_json}")
         while not os.path.exists(slides_json):
@@ -235,7 +315,7 @@ class WorkflowService:
             # Log every 10 seconds to show we're still waiting
             if int(time.time()) % 10 == 0:
                 self._log_message("Still waiting for slide selection...")
-        
+
         self.workflow_state.interactive_stage = None
         self.workflow_state.interactive_ready = False
         self._log_message("✅ Slide selection completed")
@@ -338,13 +418,13 @@ class WorkflowService:
         """Refine notes using AI."""
         self.workflow_state.current_step = 'Refining notes'
         self.workflow_state.progress = 90
-        
+
         refine_notes_command = [
             "python", "scripts/refine-notes.py",
             "-i", notes_path,
             "-o", output_dir
         ]
-        
+
         # Use specified model or fall back to config/default
         model = llm_model or current_app.config.get('REFINE_NOTES_LLM', 'openai/gpt-4o-2024-08-06')
         if model:
@@ -352,9 +432,47 @@ class WorkflowService:
             self._log_message(f"🤖 Using LLM model for note refinement: {model}")
         else:
             self._log_message("⚠️ No LLM model specified, using default model")
-        
+
         return execute_command(refine_notes_command, "Refining notes with AI", log_callback=self._log_message)
-    
+
+    def _refine_notes_thread(self, notes_path: str, output_dir: str, llm_model: str) -> None:
+        """Thread function to run note refinement asynchronously.
+
+        This runs refinement on the raw notes (with SPEAKER_XX identifiers).
+        Speaker names will be applied later if speaker labeling is enabled.
+        """
+        with self.app.app_context():
+            try:
+                self._log_message("🚀 Starting AI enhancement in background thread...")
+
+                refine_notes_command = [
+                    "python", "scripts/refine-notes.py",
+                    "-i", notes_path,
+                    "-o", output_dir
+                ]
+
+                model = llm_model or current_app.config.get('REFINE_NOTES_LLM', 'openai/gpt-4o-2024-08-06')
+                if model:
+                    refine_notes_command.extend(["-m", model])
+                    self._log_message(f"🤖 Using LLM model for note refinement: {model}")
+
+                success = execute_command(refine_notes_command, "Refining notes with AI (background)", log_callback=self._log_message)
+
+                if success:
+                    # Calculate the refined output path
+                    input_basename = os.path.basename(notes_path)
+                    refined_path = os.path.join(output_dir, f"refined_{input_basename}")
+                    self.workflow_state.refined_notes_path = refined_path
+                    self._log_message(f"✅ AI enhancement completed: {refined_path}")
+                else:
+                    self._log_message("❌ AI enhancement failed")
+
+                self.workflow_state.refinement_complete = True
+
+            except Exception as e:
+                self._log_message(f"💥 Error in refinement thread: {str(e)}")
+                self.workflow_state.refinement_complete = True
+
     def _log_message(self, message: str) -> None:
         """Add a message to the workflow logs."""
         self.workflow_state.add_log(message)

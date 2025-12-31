@@ -210,6 +210,58 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
 
     return unique_slides
 
+
+def deduplicate_slides_by_ocr(unique_slides, save_folder):
+    """
+    Final deduplication pass: remove slides with identical OCR text.
+
+    After image hash-based deduplication, some slides may still have the exact
+    same text content (e.g., repeated title slides, section headers). This function
+    compares OCR text and keeps only the first occurrence of each unique text.
+
+    Args:
+        unique_slides: List of slide dictionaries with 'ocr_text' field
+        save_folder: Folder where slide images are saved (for cleanup)
+
+    Returns:
+        Deduplicated list of slides
+    """
+    if not unique_slides:
+        return unique_slides
+
+    seen_ocr_texts = set()
+    deduplicated_slides = []
+    removed_count = 0
+
+    for slide in unique_slides:
+        ocr_text = slide.get('ocr_text', '').strip()
+
+        # Normalize OCR text for comparison (remove extra whitespace)
+        normalized_text = ' '.join(ocr_text.split())
+
+        if normalized_text in seen_ocr_texts:
+            # Duplicate OCR text found - remove this slide
+            removed_count += 1
+            logging.info(f"Removing slide {slide['group_id']} - duplicate OCR text (same as earlier slide)")
+
+            # Delete the image file
+            slide_filepath = os.path.join(save_folder, f"slide_{slide['group_id']}.png")
+            if os.path.exists(slide_filepath):
+                os.remove(slide_filepath)
+                logging.info(f"Deleted duplicate slide image: {slide_filepath}")
+        else:
+            # New unique OCR text - keep this slide
+            seen_ocr_texts.add(normalized_text)
+            deduplicated_slides.append(slide)
+
+    if removed_count > 0:
+        logging.info(f"OCR deduplication: removed {removed_count} slides with duplicate text content")
+        logging.info(f"Final slide count: {len(deduplicated_slides)} (was {len(unique_slides)})")
+    else:
+        logging.info("OCR deduplication: no duplicate text content found")
+
+    return deduplicated_slides
+
 def main():
     parser = argparse.ArgumentParser(description="Extract unique slides from a video.")
     parser.add_argument('-i', '--video_path', required=True, help='Path to the video file')
@@ -218,7 +270,7 @@ def main():
     parser.add_argument('-s', '--start_seconds', type=int, default=1, help='Start time in seconds')
     parser.add_argument('-e', '--end_seconds', type=int, default=None, help='End time in seconds')
     parser.add_argument('-f', '--frame_rate', type=int, default=1, help='Extract one frame every N seconds')
-    parser.add_argument('-t', '--similarity_threshold', type=int, default=13, help='Threshold for perceptual hash difference')
+    parser.add_argument('-t', '--similarity_threshold', type=int, default=10, help='Threshold for perceptual hash difference')
     parser.add_argument('--select', action='store_true', help='Launch slide selector web app after extraction')
     args = parser.parse_args()
 
@@ -253,7 +305,7 @@ def main():
     os.makedirs(save_folder, exist_ok=True)
     logging.info(f'Saving slides to {save_folder}')
 
-    # Extract unique slides
+    # Extract unique slides (image hash-based deduplication)
     unique_slides = extract_unique_slides(
         video_path=args.video_path,
         save_folder=save_folder,
@@ -264,6 +316,10 @@ def main():
         frame_rate=args.frame_rate,
         similarity_threshold=args.similarity_threshold
     )
+
+    # Final pass: deduplicate slides with identical OCR text
+    logging.info("Running OCR text deduplication pass...")
+    unique_slides = deduplicate_slides_by_ocr(unique_slides, save_folder)
 
     # Save unique_slides to a JSON file
     json_file = os.path.join(save_folder, 'slides.json')

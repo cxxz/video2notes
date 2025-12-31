@@ -55,7 +55,8 @@ def start_workflow():
         roi_timestamp=_parse_float(request.form.get('roi_timestamp', '').strip()),
         do_label_speakers=request.form.get('do_label_speakers', 'on') == 'on',
         do_refine_notes=request.form.get('do_refine_notes') == 'on',
-        refine_notes_llm=request.form.get('refine_notes_llm', '').strip()
+        refine_notes_llm=request.form.get('refine_notes_llm', '').strip(),
+        skip_slide_selection=request.form.get('skip_slide_selection', 'on') == 'on'
     )
     
     # Debug logging

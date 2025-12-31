@@ -332,11 +332,17 @@
                 <div class="conditional hpe-hidden" id="roi_options">
                     <div class="hpe-form-group">
                         <label for="roi_timestamp" class="hpe-label">Initial Timestamp for ROI Selection (seconds)</label>
-                        <input type="number" id="roi_timestamp" name="roi_timestamp" 
+                        <input type="number" id="roi_timestamp" name="roi_timestamp"
                                placeholder="60" step="0.1" class="hpe-input">
                         <div class="help-text">Timestamp to display for ROI selection interface</div>
                     </div>
                 </div>
+
+                <div class="hpe-checkbox hpe-mt-4">
+                    <input type="checkbox" id="skip_slide_selection" name="skip_slide_selection" checked>
+                    <label for="skip_slide_selection">Skip manual slide selection (auto-select all slides)</label>
+                </div>
+                <div class="help-text">When checked, all slides are automatically selected and vocabulary is extracted using AI. Uncheck to manually select slides.</div>
             </div>
 
             <!-- Processing Options -->

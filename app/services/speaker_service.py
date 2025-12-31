@@ -236,18 +236,18 @@ class SpeakerService:
         """Replace speaker headers with user-provided names."""
         updated_content = self.state.transcript_content
         speaker_mapping = self.state.speaker_mapping
-        
+
         # Debug logging
         workflow_state.add_log(f"DEBUG: update_transcript_with_labels called with mapping: {speaker_mapping}")
-        
+
         pattern = re.compile(r'\*\*(SPEAKER_\d{2})( \[[0-9:.]+\]:\*\*)')
-        
+
         replacements_made = []
-        
+
         def replace_func(match):
             speaker_id = match.group(1)
             timestamp_part = match.group(2)
-            
+
             if speaker_id in speaker_mapping:
                 new_name = speaker_mapping[speaker_id]
                 replacement = f"**{new_name}{timestamp_part}"
@@ -255,12 +255,67 @@ class SpeakerService:
                 return replacement
             else:
                 return match.group(0)  # No replacement
-        
+
         updated_content = pattern.sub(replace_func, updated_content)
-        
+
         # Debug logging
         workflow_state.add_log(f"DEBUG: Made {len(replacements_made)} replacements:")
         for replacement in replacements_made:
             workflow_state.add_log(f"DEBUG: {replacement}")
-        
+
         return updated_content
+
+    def apply_speaker_labels_to_file(self, input_path: str, output_path: str) -> bool:
+        """Apply the current speaker mapping to a transcript file.
+
+        This is used for post-processing refined transcripts after speaker labeling
+        is complete but refinement used generic SPEAKER_XX identifiers.
+
+        Args:
+            input_path: Path to transcript file with SPEAKER_XX identifiers
+            output_path: Path to save the transcript with speaker names
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            speaker_mapping = self.state.speaker_mapping
+
+            if not speaker_mapping:
+                # No mapping to apply, just copy the file
+                workflow_state.add_log("No speaker mapping available, copying file unchanged")
+                with open(input_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                return True
+
+            with open(input_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            # Same regex pattern as _update_transcript_with_labels
+            pattern = re.compile(r'\*\*(SPEAKER_\d{2})( \[[0-9:.]+\]:\*\*)')
+            replacements_made = []
+
+            def replace_func(match):
+                speaker_id = match.group(1)
+                timestamp_part = match.group(2)
+
+                if speaker_id in speaker_mapping:
+                    new_name = speaker_mapping[speaker_id]
+                    replacements_made.append(f"{speaker_id} -> {new_name}")
+                    return f"**{new_name}{timestamp_part}"
+                return match.group(0)
+
+            updated_content = pattern.sub(replace_func, content)
+
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(updated_content)
+
+            workflow_state.add_log(f"Applied {len(replacements_made)} speaker label replacements to refined transcript")
+            return True
+
+        except Exception as e:
+            current_app.logger.error(f"Error applying speaker labels to file: {e}")
+            workflow_state.add_log(f"⚠️ Error applying speaker labels to refined transcript: {str(e)}")
+            return False

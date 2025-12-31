@@ -35,6 +35,7 @@ class WorkflowParameters:
     do_label_speakers: bool = True
     do_refine_notes: bool = False
     refine_notes_llm: str = ''
+    skip_slide_selection: bool = True  # Default: skip manual slide selection
 
 
 class WorkflowState:
@@ -56,6 +57,10 @@ class WorkflowState:
         self._interactive_ready = False
         self._parameters = WorkflowParameters()
         self._debug_logged = False
+        # Thread tracking for parallel refinement
+        self._refinement_thread: Optional[threading.Thread] = None
+        self._refinement_complete: bool = False
+        self._refined_notes_path: Optional[str] = None
         self._lock = threading.Lock()
     
     @property
@@ -243,7 +248,43 @@ class WorkflowState:
         """Set debug logged status."""
         with self._lock:
             self._debug_logged = value
-    
+
+    @property
+    def refinement_thread(self) -> Optional[threading.Thread]:
+        """Get refinement thread."""
+        with self._lock:
+            return self._refinement_thread
+
+    @refinement_thread.setter
+    def refinement_thread(self, value: Optional[threading.Thread]) -> None:
+        """Set refinement thread."""
+        with self._lock:
+            self._refinement_thread = value
+
+    @property
+    def refinement_complete(self) -> bool:
+        """Get refinement completion status."""
+        with self._lock:
+            return self._refinement_complete
+
+    @refinement_complete.setter
+    def refinement_complete(self, value: bool) -> None:
+        """Set refinement completion status."""
+        with self._lock:
+            self._refinement_complete = value
+
+    @property
+    def refined_notes_path(self) -> Optional[str]:
+        """Get refined notes path."""
+        with self._lock:
+            return self._refined_notes_path
+
+    @refined_notes_path.setter
+    def refined_notes_path(self, value: Optional[str]) -> None:
+        """Set refined notes path."""
+        with self._lock:
+            self._refined_notes_path = value
+
     def reset(self) -> None:
         """Reset workflow state to initial values."""
         with self._lock:
@@ -254,6 +295,9 @@ class WorkflowState:
             self._interactive_stage = None
             self._interactive_ready = False
             self._debug_logged = False
+            self._refinement_thread = None
+            self._refinement_complete = False
+            self._refined_notes_path = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert state to dictionary for API responses."""
