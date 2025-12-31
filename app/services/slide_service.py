@@ -104,7 +104,7 @@ class SlideService:
             current_app.logger.error(f"Error saving slide selection: {e}")
             return {'success': False, 'error': str(e)}
     
-    def extract_vocabulary(self, model_id: str = 'bedrock/claude-4-sonnet') -> Dict[str, Any]:
+    def extract_vocabulary(self, model_id: str = 'azure/gpt-5.1') -> Dict[str, Any]:
         """Extract vocabulary via LLM."""
         if not self.state.active:
             return {'success': False, 'error': 'Slide selector not active'}

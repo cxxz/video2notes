@@ -92,7 +92,7 @@ def extract_vocabulary_ajax():
     
     try:
         data = request.get_json()
-        model_id = data.get('model_id', 'bedrock/claude-4-sonnet')
+        model_id = data.get('model_id', 'azure/gpt-5.1')
         
         result = slide_service.extract_vocabulary(model_id)
         

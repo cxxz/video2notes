@@ -43,7 +43,7 @@ class Config:
     # Allowed LLM models for note refinement
     ALLOWED_LLM_MODELS: List[str] = [
         'openai/gpt-oss-120b',
-        'bedrock/claude-4-sonnet',
+        'azure/gpt-5.1',
     ]
     
     # File cleanup configuration
