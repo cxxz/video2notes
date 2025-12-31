@@ -152,5 +152,3 @@ def save_vocabulary():
         return jsonify({'error': str(e)}), 500
 
 
-# Import render_template_string for the temporary template
-from flask import render_template_string

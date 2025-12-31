@@ -1,8 +1,10 @@
 """
 Speaker labeling routes for Video2Notes application.
 """
-from flask import Blueprint, render_template, request, jsonify, send_file, redirect, url_for
-from flask import current_app
+from flask import (
+    Blueprint, render_template, render_template_string, request,
+    jsonify, send_file, redirect, url_for, current_app
+)
 
 from ..models.speaker_labeler import speaker_labeler_state
 from ..services.speaker_service import SpeakerService
@@ -105,5 +107,3 @@ def speaker_labeling_result():
     )
 
 
-# Import render_template_string for error pages
-from flask import render_template_string

@@ -1,13 +1,30 @@
-python-dotenv
-opencv-python
-moviepy
-imagehash
-pytesseract
-scrubadub_spacy
-pydub
-openai
-whisperx
-playwright
-Flask>=2.3.3
-Werkzeug>=2.3.7
-anthropic[bedrock]
+# Core dependencies
+python-dotenv>=1.0.0,<2.0.0
+Flask>=2.3.3,<3.0.0
+Werkzeug>=2.3.7,<3.0.0
+
+# Video/Audio processing
+opencv-python>=4.8.0,<5.0.0
+moviepy>=1.0.0,<3.0.0
+pydub>=0.25.0,<0.26.0
+
+# Image processing
+imagehash>=4.3.0,<5.0.0
+Pillow>=10.0.0,<11.0.0
+
+# OCR
+pytesseract>=0.3.10,<0.4.0
+
+# ML/AI - Transcription
+whisperx>=3.0.0,<4.0.0
+
+# LLM clients
+openai>=1.0.0,<2.0.0
+anthropic[bedrock]>=0.18.0,<1.0.0
+
+# Text processing
+scrubadub>=2.0.0,<3.0.0
+scrubadub_spacy>=2.0.0,<3.0.0
+
+# Browser automation (optional)
+playwright>=1.40.0,<2.0.0

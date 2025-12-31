@@ -117,7 +117,6 @@ class SlideService:
                 return {'success': False, 'error': 'No OCR text available'}
             
             # Extract vocabulary using LLM
-            from utils import initialize_client, get_llm_response
             vocabulary = self._extract_vocabulary_with_llm(combined_text, model_id)
             
             return {
@@ -210,6 +209,6 @@ Now extract 20 to 30 vocabulary terms from the transcript:
 1. Output them in a comma-separated list
 2. If they are abbreviations, do not spell out the full names.
 """
-        from utils import initialize_client, get_llm_response
+        from ..utils.llm_utils import initialize_client, get_llm_response
         client = initialize_client(model_id)
         return get_llm_response(client, model_id, extract_voc_prompt)

@@ -13,7 +13,10 @@ from ..models.workflow_state import workflow_state
 
 class SpeakerService:
     """Service for handling speaker labeling operations."""
-    
+
+    # Regex pattern for speaker replacement (matches **SPEAKER_XX [timestamp]:**)
+    SPEAKER_REPLACE_PATTERN = re.compile(r'\*\*(SPEAKER_\d{2})( \[[0-9:.]+\]:\*\*)')
+
     def __init__(self):
         self.state = speaker_labeler_state
     
@@ -232,16 +235,18 @@ class SpeakerService:
             current_app.logger.error(f"Error parsing timestamp '{ts_str}': {e}")
             return 0
     
-    def _update_transcript_with_labels(self) -> str:
-        """Replace speaker headers with user-provided names."""
-        updated_content = self.state.transcript_content
-        speaker_mapping = self.state.speaker_mapping
+    def _apply_speaker_labels_to_content(
+        self, content: str, speaker_mapping: Dict[str, str]
+    ) -> Tuple[str, List[str]]:
+        """Apply speaker labels to transcript content.
 
-        # Debug logging
-        workflow_state.add_log(f"DEBUG: update_transcript_with_labels called with mapping: {speaker_mapping}")
+        Args:
+            content: The transcript content with SPEAKER_XX placeholders
+            speaker_mapping: Dict mapping SPEAKER_XX to actual names
 
-        pattern = re.compile(r'\*\*(SPEAKER_\d{2})( \[[0-9:.]+\]:\*\*)')
-
+        Returns:
+            Tuple of (updated_content, list_of_replacements_made)
+        """
         replacements_made = []
 
         def replace_func(match):
@@ -250,15 +255,23 @@ class SpeakerService:
 
             if speaker_id in speaker_mapping:
                 new_name = speaker_mapping[speaker_id]
-                replacement = f"**{new_name}{timestamp_part}"
                 replacements_made.append(f"{speaker_id} -> {new_name}")
-                return replacement
-            else:
-                return match.group(0)  # No replacement
+                return f"**{new_name}{timestamp_part}"
+            return match.group(0)
 
-        updated_content = pattern.sub(replace_func, updated_content)
+        updated_content = self.SPEAKER_REPLACE_PATTERN.sub(replace_func, content)
+        return updated_content, replacements_made
 
-        # Debug logging
+    def _update_transcript_with_labels(self) -> str:
+        """Replace speaker headers with user-provided names."""
+        speaker_mapping = self.state.speaker_mapping
+
+        workflow_state.add_log(f"DEBUG: update_transcript_with_labels called with mapping: {speaker_mapping}")
+
+        updated_content, replacements_made = self._apply_speaker_labels_to_content(
+            self.state.transcript_content, speaker_mapping
+        )
+
         workflow_state.add_log(f"DEBUG: Made {len(replacements_made)} replacements:")
         for replacement in replacements_made:
             workflow_state.add_log(f"DEBUG: {replacement}")
@@ -284,30 +297,16 @@ class SpeakerService:
             if not speaker_mapping:
                 # No mapping to apply, just copy the file
                 workflow_state.add_log("No speaker mapping available, copying file unchanged")
-                with open(input_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    f.write(content)
+                import shutil
+                shutil.copy2(input_path, output_path)
                 return True
 
             with open(input_path, 'r', encoding='utf-8') as f:
                 content = f.read()
 
-            # Same regex pattern as _update_transcript_with_labels
-            pattern = re.compile(r'\*\*(SPEAKER_\d{2})( \[[0-9:.]+\]:\*\*)')
-            replacements_made = []
-
-            def replace_func(match):
-                speaker_id = match.group(1)
-                timestamp_part = match.group(2)
-
-                if speaker_id in speaker_mapping:
-                    new_name = speaker_mapping[speaker_id]
-                    replacements_made.append(f"{speaker_id} -> {new_name}")
-                    return f"**{new_name}{timestamp_part}"
-                return match.group(0)
-
-            updated_content = pattern.sub(replace_func, content)
+            updated_content, replacements_made = self._apply_speaker_labels_to_content(
+                content, speaker_mapping
+            )
 
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(updated_content)

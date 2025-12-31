@@ -45,8 +45,60 @@ def seconds_to_hms(seconds):
     h, m = divmod(m, 60)
     return h, m, s
 
+def _is_duplicate_slide(current_hash, slide_hash_index, similarity_threshold):
+    """Check if current_hash is similar to any hash in the index.
+
+    Args:
+        current_hash: ImageHash object for current slide
+        slide_hash_index: Dict mapping hash_str -> (group_id, ImageHash object)
+        similarity_threshold: Max Hamming distance for duplicates
+
+    Returns:
+        Tuple of (is_duplicate, matching_group_id or None)
+    """
+    for hash_str, (stored_group_id, stored_hash_obj) in slide_hash_index.items():
+        if abs(current_hash - stored_hash_obj) <= similarity_threshold:
+            return True, stored_group_id
+    return False, None
+
+
+def _read_frame_at_position(cap, frame_number, slide_roi, masks_roi):
+    """Seek to frame position and read the frame.
+
+    Args:
+        cap: OpenCV VideoCapture object
+        frame_number: Frame number to read
+        slide_roi: ROI for cropping slides
+        masks_roi: List of ROIs to mask
+
+    Returns:
+        Tuple of (unmasked_frame, slide_frame) or (None, None) if read fails
+    """
+    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+    ret, frame = cap.read()
+    if not ret:
+        return None, None
+
+    unmasked_frame = frame.copy()
+
+    if masks_roi:
+        masked_frame = frame.copy()
+        for roi in masks_roi:
+            masked_frame = mask_frame(masked_frame, roi)
+        slide_frame = crop_slide(masked_frame, slide_roi)
+    else:
+        slide_frame = crop_slide(frame, slide_roi)
+
+    return unmasked_frame, slide_frame
+
+
 def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, start_seconds=0, end_seconds=None, frame_rate=1, similarity_threshold=10):
-    """Extract unique slides from the video and save them to the specified folder."""
+    """Extract unique slides from the video and save them to the specified folder.
+
+    Optimizations:
+    - Uses hash index dict for O(1) lookups when checking exact matches
+    - Stores frame numbers instead of full frames to reduce memory usage
+    """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         logging.error(f"Cannot open video file {video_path}")
@@ -60,10 +112,13 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
     cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
 
     unique_slides = []
+    # Hash index for efficient duplicate detection: hash_str -> (group_id, ImageHash object)
+    slide_hash_index = {}
     last_slide_hash = None
     group_started = False
     first_timestamp_of_group = None
-    slides_buffer = []
+    # Store frame numbers instead of full frames (memory optimization)
+    group_frame_numbers = []
     speaker_names = []
     names_text = ""
     group_id = 0
@@ -74,8 +129,6 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
         ret, frame = cap.read()
         if not ret:
             break
-
-        unmasked_frame = frame.copy()
 
         # Apply masks if any
         if masks_roi:
@@ -92,55 +145,55 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
 
         # Calculate perceptual hash
         current_hash = imagehash.phash(pil_image)
-        # print(f"CONG TES current_hash: {current_hash}")
 
         # Compare with the last slide hash
         if last_slide_hash is None or abs(current_hash - last_slide_hash) > similarity_threshold:
-            # ocr_text = pytesseract.image_to_string(unmasked_frame)
-            # len_ocr_text = len(ocr_text)
-            # if len_ocr_text < 10:
-            #     # Categorize as non-slide if OCR text is too short
-            #     frame_number += frame_interval
-            #     cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
-            #     continue
-
             # End of a group; save the middle slide
-            if group_started and slides_buffer:     
+            if group_started and group_frame_numbers:
                 add_new_slide = True
 
-                slide_index = int(len(slides_buffer) / 2)       
-                selected_slide = slides_buffer[slide_index]
+                # Memory optimization: read the middle frame on demand instead of storing all frames
+                middle_idx = len(group_frame_numbers) // 2
+                middle_frame_num = group_frame_numbers[middle_idx]
 
-                ocr_text = pytesseract.image_to_string(selected_slide)
-                len_ocr_text = len(ocr_text)
-                if len_ocr_text < 10:
+                # Save current position to restore after seeking
+                current_pos = frame_number
+
+                # Seek to middle frame and read it
+                selected_slide, _ = _read_frame_at_position(cap, middle_frame_num, slide_roi, masks_roi)
+                if selected_slide is None:
                     add_new_slide = False
-                elif len(unique_slides) > 0:
-                    for slide in unique_slides:
-                        prev_group = slide['group_id']
-                        prev_imagehash = slide['imagehash']
-                        if abs(current_hash - prev_imagehash) <= similarity_threshold:
-                            logging.info(f"Duplicate slide found: {prev_group} with current group {group_id}")
+                else:
+                    ocr_text = pytesseract.image_to_string(selected_slide)
+                    len_ocr_text = len(ocr_text)
+                    if len_ocr_text < 10:
+                        add_new_slide = False
+                    elif slide_hash_index:
+                        # Use hash index for duplicate detection
+                        is_dup, dup_group = _is_duplicate_slide(current_hash, slide_hash_index, similarity_threshold)
+                        if is_dup:
+                            logging.info(f"Duplicate slide found: {dup_group} with current group {group_id}")
                             add_new_slide = False
-                            break
-                    
-                    if add_new_slide and len_ocr_text <= 300:
-                        # Check if the slide contains mostly names
-                        is_mostly_names, _, names = analyze_text_for_names(ocr_text)
-                        if is_mostly_names:
-                            logging.info(f"Slide {group_id} contains mostly names: {names} in ocr_text: {ocr_text}")
-                            if len(names) > len(speaker_names):
-                                speaker_names = names
-                                names_text = ocr_text
-                            add_new_slide = False
-                            
-                if add_new_slide:
-                    timestamps = first_timestamp_of_group
+
+                        if add_new_slide and len_ocr_text <= 300:
+                            # Check if the slide contains mostly names
+                            is_mostly_names, _, names = analyze_text_for_names(ocr_text)
+                            if is_mostly_names:
+                                logging.info(f"Slide {group_id} contains mostly names: {names} in ocr_text: {ocr_text}")
+                                if len(names) > len(speaker_names):
+                                    speaker_names = names
+                                    names_text = ocr_text
+                                add_new_slide = False
+
+                if add_new_slide and selected_slide is not None:
                     slide_filepath = os.path.join(save_folder, f'slide_{group_id}.png')
                     image_path = os.path.join(slides_folder, f'slide_{group_id}.png')
                     cv2.imwrite(slide_filepath, selected_slide)
                     h, m, s = seconds_to_hms(first_timestamp_of_group)
                     logging.info(f'slide_{group_id}.png starts at: {h:02d}:{m:02d}:{s:02d} with {len_ocr_text} characters')
+
+                    # Add to hash index for future duplicate detection
+                    slide_hash_index[str(current_hash)] = (group_id, current_hash)
 
                     unique_slides.append({
                         'group_id': group_id,
@@ -150,51 +203,54 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
                         'imagehash': current_hash
                     })
 
-                slides_buffer = []
+                # Clear frame numbers for next group
+                group_frame_numbers = []
                 group_id += 1
                 group_started = False
 
-                # Skip frames to avoid transition slides
-                frame_number += fps * 3  # Skip next 3 seconds
+                # Restore position and skip frames to avoid transition slides
+                frame_number = current_pos + fps * 3  # Skip next 3 seconds
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
                 continue
 
             # Start a new group
             first_timestamp_of_group = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000  # in seconds
-            slides_buffer = [unmasked_frame]
+            group_frame_numbers = [frame_number]  # Store frame number, not frame data
             group_started = True
         else:
-            # We are in a group of similar slides
+            # We are in a group of similar slides - store frame number only
             if group_started:
-                slides_buffer.append(unmasked_frame)
+                group_frame_numbers.append(frame_number)
 
         last_slide_hash = current_hash
         frame_number += frame_interval
         cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
 
     # Handle the last group if any
-    if group_started and slides_buffer:
-        timestamps = first_timestamp_of_group
-        slide_index = int(len(slides_buffer) / 2)
-        selected_slide = slides_buffer[slide_index]
+    if group_started and group_frame_numbers:
+        # Memory optimization: read the middle frame on demand
+        middle_idx = len(group_frame_numbers) // 2
+        middle_frame_num = group_frame_numbers[middle_idx]
 
-        # Perform OCR on the selected slide
-        ocr_text = pytesseract.image_to_string(selected_slide)
-        len_ocr_text = len(ocr_text)
-        if len_ocr_text >= 10:
-            slide_filepath = os.path.join(save_folder, f'slide_{group_id}.png')
-            image_path = os.path.join(slides_folder, f'slide_{group_id}.png')
-            cv2.imwrite(slide_filepath, selected_slide)
-            h, m, s = seconds_to_hms(first_timestamp_of_group)
-            logging.info(f'slide_{group_id}.png starts at: {h:02d}:{m:02d}:{s:02d} with {len_ocr_text} characters')
+        selected_slide, _ = _read_frame_at_position(cap, middle_frame_num, slide_roi, masks_roi)
+        if selected_slide is not None:
+            # Perform OCR on the selected slide
+            ocr_text = pytesseract.image_to_string(selected_slide)
+            len_ocr_text = len(ocr_text)
+            if len_ocr_text >= 10:
+                slide_filepath = os.path.join(save_folder, f'slide_{group_id}.png')
+                image_path = os.path.join(slides_folder, f'slide_{group_id}.png')
+                cv2.imwrite(slide_filepath, selected_slide)
+                h, m, s = seconds_to_hms(first_timestamp_of_group)
+                logging.info(f'slide_{group_id}.png starts at: {h:02d}:{m:02d}:{s:02d} with {len_ocr_text} characters')
 
-            unique_slides.append({
-                'group_id': group_id,
-                'timestamp': first_timestamp_of_group,
-                'image_path': image_path,
-                'ocr_text': ocr_text,
-                'imagehash': current_hash
-            })
+                unique_slides.append({
+                    'group_id': group_id,
+                    'timestamp': first_timestamp_of_group,
+                    'image_path': image_path,
+                    'ocr_text': ocr_text,
+                    'imagehash': current_hash
+                })
 
     cap.release()
     # Convert all imagehash objects in unique_slides to strings

@@ -235,12 +235,12 @@ class SpeakerLabelerState:
     def to_dict(self) -> Dict[str, Any]:
         """Convert state to dictionary for API responses."""
         with self._lock:
+            total = len(self._speaker_ids)
             return {
                 'active': self._active,
                 'current_index': self._current_index,
-                'total_speakers': len(self._speaker_ids),
-                'speaker_count': len(self._speaker_ids),
-                'is_completed': self._current_index >= len(self._speaker_ids),
+                'total_speakers': total,
+                'is_completed': self._current_index >= total,
                 'speaker_mapping': self._speaker_mapping,
                 'output_transcript_path': self._output_transcript_path
             }
