@@ -148,10 +148,22 @@ class WorkflowService:
                     # Handle speaker labeling interactively (blocking wait for user)
                     self._handle_speaker_labeling(audio_path, notes_path)
 
-                    # Wait for refinement thread to complete if still running
+                    # Wait for refinement thread to complete if still running (with timeout)
+                    refinement_timeout = int(os.getenv('REFINEMENT_TIMEOUT', 1800))  # 30 min default
                     if refinement_thread.is_alive():
                         self._log_message("⏳ Waiting for AI enhancement to complete...")
-                        refinement_thread.join()
+                        refinement_thread.join(timeout=refinement_timeout)
+
+                        # Check if thread is still alive after timeout
+                        if refinement_thread.is_alive():
+                            self._log_message(
+                                f"⚠️ AI enhancement timed out after {refinement_timeout}s - continuing without it"
+                            )
+                            self.workflow_state.refinement_complete = True
+
+                    # Verify refinement completed successfully
+                    if not self.workflow_state.refinement_complete:
+                        self._log_message("⚠️ AI enhancement did not complete properly")
 
                     # Apply speaker labels to the refined transcript
                     refined_path = self.workflow_state.refined_notes_path
@@ -252,21 +264,32 @@ class WorkflowService:
         return success
     
     def _auto_select_all_slides(self) -> bool:
-        """Automatically select all slides and generate vocabulary using LLM."""
+        """Automatically select all slides and generate vocabulary using LLM.
+
+        Critical failures (missing slides.json) return False.
+        Non-critical failures (vocabulary extraction) log warnings but return True.
+        """
         slides_dir = self.workflow_state.slides_dir
         original_slides_json = os.path.join(slides_dir, "slides_original.json")
         slides_json = os.path.join(slides_dir, "slides.json")
 
+        # CRITICAL: Ensure slides.json exists (copy from original or verify existing)
         try:
-            # Copy original slides.json back (select all slides)
             if os.path.exists(original_slides_json):
                 shutil.copy2(original_slides_json, slides_json)
                 self._log_message("✅ Auto-selected all slides")
+            elif os.path.exists(slides_json):
+                self._log_message("ℹ️ Using existing slides.json")
             else:
-                self._log_message("⚠️ No slides_original.json found, skipping auto-selection")
-                return True
+                # This is a critical failure - no slides available
+                self._log_message("❌ ERROR: No slides.json found - cannot proceed")
+                return False
+        except Exception as e:
+            self._log_message(f"❌ ERROR: Failed to create slides.json: {str(e)}")
+            return False
 
-            # Extract vocabulary using LLM
+        # NON-CRITICAL: Extract vocabulary using LLM (workflow can continue without it)
+        try:
             self._log_message("🤖 Extracting vocabulary using AI...")
             model_id = current_app.config.get('VOCABULARY_LLM', 'azure/gpt-5.1')
             result = self.slide_service.extract_vocabulary(model_id)
@@ -280,15 +303,18 @@ class WorkflowService:
                     self._log_message(f"⚠️ Failed to save vocabulary: {save_result.get('error', 'Unknown error')}")
             else:
                 self._log_message(f"⚠️ Vocabulary extraction failed: {result.get('error', 'Unknown error')}")
-
-            return True
-
         except Exception as e:
-            self._log_message(f"⚠️ Error in auto slide selection: {str(e)}")
-            return False
+            # Vocabulary extraction is optional - log warning but continue
+            self._log_message(f"⚠️ Vocabulary extraction error (non-critical): {str(e)}")
+
+        return True
 
     def _handle_slide_selection(self) -> bool:
-        """Handle slide selection interactive stage."""
+        """Handle slide selection interactive stage.
+
+        Waits for user to complete slide selection with configurable timeout.
+        If timeout is reached, auto-selects all slides.
+        """
         slides_dir = self.workflow_state.slides_dir
         slides_json = os.path.join(slides_dir, "slides.json")
         params = self.workflow_state.parameters
@@ -307,14 +333,35 @@ class WorkflowService:
 
         # Wait for slides to be selected (user creates new slides.json)
         self._log_message(f"Waiting for slides.json at: {slides_json}")
+
+        # Configurable timeout (default 1 hour)
+        slide_selection_timeout = int(os.getenv('SLIDE_SELECTION_TIMEOUT', 3600))
+        start_time = time.time()
+        last_log_time = start_time
+        log_interval = 60  # Log every 60 seconds
+
         while not os.path.exists(slides_json):
             time.sleep(2)
+
             if self.workflow_state.status != WorkflowStatus.RUNNING:
                 self._log_message("Workflow stopped during slide selection")
                 return False
-            # Log every 10 seconds to show we're still waiting
-            if int(time.time()) % 10 == 0:
-                self._log_message("Still waiting for slide selection...")
+
+            elapsed = time.time() - start_time
+
+            # Check for timeout
+            if elapsed > slide_selection_timeout:
+                self._log_message(
+                    f"⏰ Slide selection timeout ({slide_selection_timeout}s) reached - auto-selecting all slides"
+                )
+                self.workflow_state.interactive_stage = None
+                self.workflow_state.interactive_ready = False
+                return self._auto_select_all_slides()
+
+            # Log periodically using last_log_time (fixes the buggy modulo check)
+            if time.time() - last_log_time >= log_interval:
+                self._log_message(f"Still waiting for slide selection... ({int(elapsed)}s elapsed)")
+                last_log_time = time.time()
 
         self.workflow_state.interactive_stage = None
         self.workflow_state.interactive_ready = False
@@ -322,12 +369,38 @@ class WorkflowService:
         return True
     
     def _find_audio_file(self, output_dir: str, video_name: str) -> Optional[str]:
-        """Find extracted audio file."""
-        audio_extensions = ['.m4a', '.mp3']
+        """Find extracted audio file.
+
+        Searches for audio files with various common extensions.
+        Falls back to glob pattern matching if exact name not found.
+        """
+        import glob
+
+        # Common audio extensions in priority order
+        audio_extensions = ['.mp3', '.m4a', '.wav', '.aac', '.flac', '.ogg']
+
+        # First, try exact name match
         for ext in audio_extensions:
             audio_path = os.path.join(output_dir, f"{video_name}{ext}")
             if os.path.exists(audio_path):
                 return audio_path
+
+        # Fallback: search for any audio file with the video name prefix
+        for ext in audio_extensions:
+            pattern = os.path.join(output_dir, f"{video_name}*{ext}")
+            matches = glob.glob(pattern)
+            if matches:
+                # Return the first match
+                return matches[0]
+
+        # Last resort: search for any audio file in the directory
+        for ext in audio_extensions:
+            pattern = os.path.join(output_dir, f"*{ext}")
+            matches = glob.glob(pattern)
+            if matches:
+                self._log_message(f"⚠️ Using fallback audio file: {os.path.basename(matches[0])}")
+                return matches[0]
+
         return None
     
     def _transcribe_audio(self, audio_path: str, video_name: str, output_dir: str) -> bool:

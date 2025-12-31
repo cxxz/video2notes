@@ -5,6 +5,22 @@ import os
 from typing import List, Set
 
 
+def _parse_safe_browse_dirs() -> List[str]:
+    """Parse safe browse directories from environment or use defaults.
+
+    Environment variable SAFE_BROWSE_DIRS should be colon-separated paths.
+    Example: SAFE_BROWSE_DIRS="~:/data:/projects"
+    """
+    env_dirs = os.getenv('SAFE_BROWSE_DIRS', '')
+    if env_dirs:
+        # Parse colon-separated paths from environment
+        dirs = [d.strip() for d in env_dirs.split(':') if d.strip()]
+        # Expand user home directory references
+        return [os.path.expanduser(d) for d in dirs]
+    # Default: user home directory only (more restrictive)
+    return [os.path.expanduser('~')]
+
+
 class Config:
     """Base configuration class."""
     
@@ -23,14 +39,8 @@ class Config:
     }
     
     # Safe directories for file browsing
-    SAFE_BROWSE_DIRS: List[str] = [
-        os.path.expanduser('~'),  # User home directory
-        '/tmp',
-        '/Users',  # macOS users directory
-        '/home',   # Linux users directory
-        '/local',
-        '/lustre',
-    ]
+    # Configurable via SAFE_BROWSE_DIRS env var (colon-separated paths)
+    SAFE_BROWSE_DIRS: List[str] = _parse_safe_browse_dirs()
     
     # SharePoint configuration
     SHAREPOINT_URL = os.getenv('SHAREPOINT_URL')

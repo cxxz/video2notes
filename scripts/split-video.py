@@ -18,6 +18,10 @@ def parse_timestamp(timestamp):
     return total_seconds
 
 def main(video_file, timestamp_file):
+    """Split video into segments based on timestamps.
+
+    Uses proper resource cleanup to ensure VideoFileClip resources are released.
+    """
     # Read timestamps from file
     with open(timestamp_file, 'r') as f:
         timestamps = f.readlines()
@@ -31,22 +35,44 @@ def main(video_file, timestamp_file):
 
     # Include start time and video duration
     times = [0] + times_in_seconds
-    clip = VideoFileClip(video_file)
-    video_duration = clip.duration
-    times.append(video_duration)
 
-    # Split video into segments
-    for i in range(len(times) - 1):
-        start_time = times[i]
-        end_time = times[i + 1]
-        subclip = clip.subclip(start_time, end_time)
-        video_path = os.path.splitext(video_file)[0]
-        # print(video_path) 
-        output_path = f'{video_path}_seg_{i + 1}'
-        output_video = f'{output_path}.mp4'
-        output_audio = f'{output_path}.mp3'
-        # output_filename = f'output_segment_{i + 1}.mp4'
-        subclip.write_videofile(output_video, codec='libx264', temp_audiofile=output_audio, remove_temp=False)
+    clip = None
+    try:
+        clip = VideoFileClip(video_file)
+        video_duration = clip.duration
+        times.append(video_duration)
+
+        # Split video into segments
+        for i in range(len(times) - 1):
+            start_time = times[i]
+            end_time = times[i + 1]
+            subclip = None
+            try:
+                subclip = clip.subclip(start_time, end_time)
+                video_path = os.path.splitext(video_file)[0]
+                output_path = f'{video_path}_seg_{i + 1}'
+                output_video = f'{output_path}.mp4'
+                output_audio = f'{output_path}.mp3'
+                subclip.write_videofile(
+                    output_video,
+                    codec='libx264',
+                    temp_audiofile=output_audio,
+                    remove_temp=False
+                )
+            finally:
+                # Close subclip to release resources
+                if subclip is not None:
+                    try:
+                        subclip.close()
+                    except Exception:
+                        pass
+    finally:
+        # Always close the main clip
+        if clip is not None:
+            try:
+                clip.close()
+            except Exception:
+                pass
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:

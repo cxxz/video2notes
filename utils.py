@@ -75,7 +75,6 @@ def initialize_client(llm):
             aws_region="us-west-2",
         )
     elif llm.startswith("azure/"):
-        print(f"CONG TEST init client for ${llm}")
         client = AzureOpenAI(
             api_version="2025-03-01-preview"
         )
@@ -120,7 +119,6 @@ def get_llm_response(client, llm, prompt):
                 model_id = llm.replace("azure/", "")
             else:
                 model_id = llm
-            print(f"CONG TEST model_id: {model_id}")
             chat_completion = client.chat.completions.create(
                 model=model_id,
                 messages=[
@@ -129,7 +127,6 @@ def get_llm_response(client, llm, prompt):
                 ],
             )
             response = chat_completion.choices[0].message.content
-            print(f"CONG TEST response: {response}")
         return response
     except Exception as e:
         print(f"Error: {e}")

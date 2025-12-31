@@ -26,44 +26,62 @@ load_dotenv()
 HF_TOKEN = os.environ.get('HF_TOKEN')
 
 def get_gpu_with_most_memory():
-    """Find the GPU with the most available memory using NVIDIA ML."""
+    """Find the GPU with the most available memory using NVIDIA ML.
+
+    Uses try/finally to ensure pynvml is properly shutdown even on errors.
+    """
     if not torch.cuda.is_available():
         return 0
-    
+
     try:
         import pynvml
+    except ImportError:
+        logging.warning("pynvml not installed. Falling back to GPU 0.")
+        return 0
+
+    nvml_initialized = False
+    try:
         pynvml.nvmlInit()
+        nvml_initialized = True
+
+        max_free_memory = 0
+        best_gpu_id = 0
+
+        for gpu_id in range(torch.cuda.device_count()):
+            try:
+                handle = pynvml.nvmlDeviceGetHandleByIndex(gpu_id)
+                mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+
+                total_memory = mem_info.total
+                used_memory = mem_info.used
+                free_memory = mem_info.free
+
+                logging.info(
+                    f"GPU {gpu_id}: {free_memory / (1024**3):.2f} GB free "
+                    f"out of {total_memory / (1024**3):.2f} GB total "
+                    f"({used_memory / (1024**3):.2f} GB used)"
+                )
+
+                if free_memory > max_free_memory:
+                    max_free_memory = free_memory
+                    best_gpu_id = gpu_id
+
+            except Exception as e:
+                logging.warning(f"Failed to get memory info for GPU {gpu_id}: {e}")
+
+        return best_gpu_id
+
     except Exception as e:
         logging.warning(f"Failed to initialize NVML: {e}. Falling back to GPU 0.")
         return 0
-    
-    max_free_memory = 0
-    best_gpu_id = 0
-    
-    for gpu_id in range(torch.cuda.device_count()):
-        try:
-            handle = pynvml.nvmlDeviceGetHandleByIndex(gpu_id)
-            mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-            
-            total_memory = mem_info.total
-            used_memory = mem_info.used
-            free_memory = mem_info.free
-            
-            logging.info(f"GPU {gpu_id}: {free_memory / (1024**3):.2f} GB free out of {total_memory / (1024**3):.2f} GB total ({used_memory / (1024**3):.2f} GB used)")
-            
-            if free_memory > max_free_memory:
-                max_free_memory = free_memory
-                best_gpu_id = gpu_id
-                
-        except Exception as e:
-            logging.warning(f"Failed to get memory info for GPU {gpu_id}: {e}")
-    
-    try:
-        pynvml.nvmlShutdown()
-    except Exception as e:
-        logging.warning(f"Failed to shutdown NVML: {e}")
-    
-    return best_gpu_id
+
+    finally:
+        # Always shutdown NVML if it was initialized
+        if nvml_initialized:
+            try:
+                pynvml.nvmlShutdown()
+            except Exception as e:
+                logging.warning(f"Failed to shutdown NVML: {e}")
 
 # Constants
 if torch.cuda.is_available():

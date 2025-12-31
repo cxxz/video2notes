@@ -2,7 +2,8 @@
 Main routes for Video2Notes application.
 """
 import os
-from flask import Blueprint, render_template, jsonify, send_file
+from functools import wraps
+from flask import Blueprint, render_template, jsonify, send_file, request
 from flask import current_app
 
 from ..models.workflow_state import workflow_state
@@ -12,6 +13,35 @@ from ..services.workflow_service import WorkflowService
 from ..services.file_service import FileService
 
 main_bp = Blueprint('main', __name__)
+
+
+def debug_only(f):
+    """Decorator to restrict access to debug endpoints.
+
+    Checks:
+    1. DEBUG config must be True
+    2. If DEBUG_TOKEN is set, requires matching token in header or query param
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_app.config.get('DEBUG', False):
+            current_app.logger.warning(
+                f"Debug endpoint access denied (DEBUG=False): {request.path} from {request.remote_addr}"
+            )
+            return jsonify({'error': 'Debug endpoints are disabled in production'}), 403
+
+        # Optional: check for debug token if configured
+        debug_token = os.getenv('DEBUG_TOKEN')
+        if debug_token:
+            provided_token = request.headers.get('X-Debug-Token') or request.args.get('debug_token')
+            if provided_token != debug_token:
+                current_app.logger.warning(
+                    f"Debug endpoint access denied (invalid token): {request.path} from {request.remote_addr}"
+                )
+                return jsonify({'error': 'Invalid debug token'}), 403
+
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 @main_bp.route('/')
@@ -28,6 +58,7 @@ def status():
 
 
 @main_bp.route('/debug')
+@debug_only
 def debug():
     """Debug endpoint to check workflow state."""
     return jsonify({
@@ -36,6 +67,7 @@ def debug():
 
 
 @main_bp.route('/debug/services')
+@debug_only
 def debug_services():
     """Debug endpoint to check service availability."""
     services = {
@@ -60,6 +92,7 @@ def debug_services():
 
 
 @main_bp.route('/debug/files')
+@debug_only
 def debug_files():
     """Debug endpoint to list files in various directories."""
     info = {}

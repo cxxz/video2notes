@@ -115,20 +115,47 @@ def save_rois_to_json(rois_data, output_path):
         logging.error(f"Error saving ROIs to file: {e}")
 
 def extract_audio_from_video(video_path, output_audio_path, ffmpeg_threads=4):
-    # Load the video file
-    video_clip = VideoFileClip(video_path)
+    """Extract audio from video file.
 
-    # Extract audio from the video
-    audio_clip = video_clip.audio
+    Uses context manager to ensure proper resource cleanup even if an error occurs.
+    """
+    video_clip = None
+    audio_clip = None
+    try:
+        # Load the video file
+        video_clip = VideoFileClip(video_path)
 
-    # Write the audio to the desired output format
-    # audio_clip.write_audiofile(output_audio_path, codec="aac", ffmpeg_params=['-threads', str(ffmpeg_threads)])
-    audio_clip.write_audiofile(output_audio_path, codec="libmp3lame", ffmpeg_params=['-threads', str(ffmpeg_threads)])
-    logging.info(f"Audio extracted and saved to {output_audio_path}")
+        # Extract audio from the video
+        audio_clip = video_clip.audio
 
-    # Close the clips
-    video_clip.close()
-    audio_clip.close()
+        if audio_clip is None:
+            logging.error("No audio track found in video")
+            return
+
+        # Write the audio to the desired output format
+        audio_clip.write_audiofile(
+            output_audio_path,
+            codec="libmp3lame",
+            ffmpeg_params=['-threads', str(ffmpeg_threads)]
+        )
+        logging.info(f"Audio extracted and saved to {output_audio_path}")
+
+    except Exception as e:
+        logging.error(f"Error extracting audio: {e}")
+        raise
+
+    finally:
+        # Always close clips to release resources
+        if audio_clip is not None:
+            try:
+                audio_clip.close()
+            except Exception:
+                pass
+        if video_clip is not None:
+            try:
+                video_clip.close()
+            except Exception:
+                pass
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Select ROIs from a video at a specific timestamp.")

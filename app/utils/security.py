@@ -8,17 +8,24 @@ from flask import current_app, request
 
 
 def is_safe_path(path: str) -> bool:
-    """Check if a path is safe to browse (within allowed directories)."""
+    """Check if a path is safe to browse (within allowed directories).
+
+    Validates that the resolved path is within one of the configured safe directories.
+    Uses proper path separator checking to prevent prefix matching attacks
+    (e.g., /safe/dir123 incorrectly matching /safe/dir1).
+    """
     if not path:
         return False
-    
+
     try:
         real_path = os.path.realpath(path)
         safe_dirs: List[str] = current_app.config['SAFE_BROWSE_DIRS']
-        
+
         for safe_dir in safe_dirs:
             safe_real_path = os.path.realpath(safe_dir)
-            if real_path.startswith(safe_real_path):
+            # Check exact match OR path starts with safe_dir + separator
+            # This prevents /safe/dir123 from matching /safe/dir1
+            if real_path == safe_real_path or real_path.startswith(safe_real_path + os.sep):
                 return True
         return False
     except Exception:
