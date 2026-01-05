@@ -33,47 +33,65 @@ def is_safe_path(path: str) -> bool:
 
 
 def validate_file_path_security(file_path: str, base_dir: str) -> bool:
-    """Validate that a file path is secure and within the base directory."""
+    """Validate that a file path is secure and within the base directory.
+
+    Uses proper path separator checking to prevent prefix matching attacks
+    (e.g., /safe/dir123 incorrectly matching /safe/dir1).
+    """
     try:
         real_base_dir = os.path.realpath(base_dir)
         real_file_path = os.path.realpath(file_path)
-        return real_file_path.startswith(real_base_dir)
+        # Check exact match OR path starts with base_dir + separator
+        # This prevents /safe/dir123 from matching /safe/dir1
+        return real_file_path == real_base_dir or real_file_path.startswith(real_base_dir + os.sep)
     except Exception:
         return False
 
 
 def get_server_host() -> str:
-    """Get the server host/IP address from the request."""
-    current_app.logger.info(f"Whether to use local server: {current_app.config.get('LOCAL_SERVER', False)}")
-    
+    """Get the server host/IP address from the request.
+
+    Priority order:
+    1. LOCAL_SERVER config -> 'localhost'
+    2. SERVER_HOST environment variable (for explicit configuration)
+    3. X-Forwarded-Host header (when behind proxy)
+    4. Request Host header
+    5. socket.gethostname() fallback
+    """
     if current_app.config.get('LOCAL_SERVER', False):
         return 'localhost'
 
+    # Allow explicit configuration via environment variable
+    configured_host = os.getenv('SERVER_HOST')
+    if configured_host:
+        return configured_host
+
     # Try to get the host from the request
     host = request.host.split(':')[0]  # Remove port if present
-    
+
     # If it's localhost or 127.0.0.1, try to get actual IP
     if host in ['localhost', '127.0.0.1', '0.0.0.0']:
         # Try to get from X-Forwarded-Host header (if behind proxy)
         forwarded_host = request.headers.get('X-Forwarded-Host')
         if forwarded_host:
             return forwarded_host.split(':')[0]
-        
+
         # Try to get from Host header
-        if request.headers.get('Host'):
-            return request.headers.get('Host').split(':')[0]
-        
-        # If still localhost, try to get actual server IP
+        host_header = request.headers.get('Host')
+        if host_header and host_header.split(':')[0] not in ['localhost', '127.0.0.1', '0.0.0.0']:
+            return host_header.split(':')[0]
+
+        # Fallback: use hostname resolution (doesn't require external connectivity)
         try:
-            # Connect to a remote address to get local IP
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                s.connect(("8.8.8.8", 80))
-                local_ip = s.getsockname()[0]
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            if local_ip and local_ip != '127.0.0.1':
                 return local_ip
-        except Exception:
-            # Fall back to localhost if all else fails
-            return 'localhost'
-    
+        except socket.error:
+            pass
+
+        return 'localhost'
+
     return host
 
 

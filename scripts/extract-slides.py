@@ -14,8 +14,8 @@ import logging
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import slide selection functionality
-from utils import analyze_text_for_names
+# Import utility functions from app module
+from app.utils.text_utils import analyze_text_for_names
 from slides_selector import run_slide_selector
 
 # Set up logging
@@ -24,10 +24,15 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
+# Slide extraction constants
+MIN_OCR_TEXT_LENGTH = 10  # Minimum characters for a valid slide
+MAX_OCR_TEXT_FOR_NAME_CHECK = 300  # Maximum characters to check for name detection
+
+
 def crop_slide(frame, roi):
+    """Crop the slide area from the frame using the defined ROI."""
     if roi is None:
         return frame
-    """Crop the slide area from the frame using the defined ROI."""
     x, y, w, h = roi
     return frame[y:y+h, x:x+w]
 
@@ -104,6 +109,15 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
         logging.error(f"Cannot open video file {video_path}")
         return []
 
+    try:
+        return _extract_slides_impl(cap, video_path, save_folder, slide_roi, masks_roi, start_seconds, end_seconds, frame_rate, similarity_threshold)
+    finally:
+        cap.release()
+
+
+def _extract_slides_impl(cap, video_path, save_folder, slide_roi, masks_roi, start_seconds, end_seconds, frame_rate, similarity_threshold):
+    """Internal implementation of extract_unique_slides with guaranteed cleanup."""
+
     fps = cap.get(cv2.CAP_PROP_FPS)
     frame_interval = fps * frame_rate
     frame_number = start_seconds * fps
@@ -166,7 +180,7 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
                 else:
                     ocr_text = pytesseract.image_to_string(selected_slide)
                     len_ocr_text = len(ocr_text)
-                    if len_ocr_text < 10:
+                    if len_ocr_text < MIN_OCR_TEXT_LENGTH:
                         add_new_slide = False
                     elif slide_hash_index:
                         # Use hash index for duplicate detection
@@ -175,7 +189,7 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
                             logging.info(f"Duplicate slide found: {dup_group} with current group {group_id}")
                             add_new_slide = False
 
-                        if add_new_slide and len_ocr_text <= 300:
+                        if add_new_slide and len_ocr_text <= MAX_OCR_TEXT_FOR_NAME_CHECK:
                             # Check if the slide contains mostly names
                             is_mostly_names, _, names = analyze_text_for_names(ocr_text)
                             if is_mostly_names:
@@ -237,7 +251,7 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
             # Perform OCR on the selected slide
             ocr_text = pytesseract.image_to_string(selected_slide)
             len_ocr_text = len(ocr_text)
-            if len_ocr_text >= 10:
+            if len_ocr_text >= MIN_OCR_TEXT_LENGTH:
                 slide_filepath = os.path.join(save_folder, f'slide_{group_id}.png')
                 image_path = os.path.join(slides_folder, f'slide_{group_id}.png')
                 cv2.imwrite(slide_filepath, selected_slide)
@@ -252,7 +266,6 @@ def extract_unique_slides(video_path, save_folder, slide_roi, masks_roi=None, st
                     'imagehash': current_hash
                 })
 
-    cap.release()
     # Convert all imagehash objects in unique_slides to strings
     for slide in unique_slides:
         slide['imagehash'] = str(slide['imagehash'])

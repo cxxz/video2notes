@@ -1,16 +1,16 @@
 """
 Main routes for Video2Notes application.
 """
+import hmac
 import os
 from functools import wraps
-from flask import Blueprint, render_template, jsonify, send_file, request
+from flask import Blueprint, render_template, jsonify, request
 from flask import current_app
 
 from ..models.workflow_state import workflow_state
 from ..models.slide_selector import slide_selector_state
 from ..models.speaker_labeler import speaker_labeler_state
 from ..services.workflow_service import WorkflowService
-from ..services.file_service import FileService
 
 main_bp = Blueprint('main', __name__)
 
@@ -34,7 +34,8 @@ def debug_only(f):
         debug_token = os.getenv('DEBUG_TOKEN')
         if debug_token:
             provided_token = request.headers.get('X-Debug-Token') or request.args.get('debug_token')
-            if provided_token != debug_token:
+            # Use constant-time comparison to prevent timing attacks
+            if not provided_token or not hmac.compare_digest(provided_token, debug_token):
                 current_app.logger.warning(
                     f"Debug endpoint access denied (invalid token): {request.path} from {request.remote_addr}"
                 )
@@ -118,23 +119,3 @@ def debug_files():
                 info['output_dir']['files'].append(rel_path)
     
     return jsonify(info)
-
-
-@main_bp.route('/download/<path:filename>')
-def download_file(filename):
-    """Download generated files - compatibility route for original app."""
-    file_service = FileService()
-    
-    result = file_service.prepare_download_file(workflow_state.output_dir, filename)
-    
-    if not result['success']:
-        status_code = 403 if 'Invalid file path' in result['error'] else 404
-        return jsonify({'error': result['error']}), status_code
-    
-    file_path = result['file_path']
-    
-    # Handle ZIP files with proper content type
-    if filename.lower().endswith('.zip'):
-        return send_file(file_path, as_attachment=True, mimetype='application/zip')
-    else:
-        return send_file(file_path, as_attachment=True)

@@ -20,13 +20,13 @@ def sort_transcript(transcript):
     """
     Sort transcript entries by their start time.
     """
-    return sorted(transcript, key=lambda x: x['start'])
+    return sorted(transcript, key=lambda x: x.get('start', 0))
 
 def sort_screenshots(screenshots):
     """
     Sort screenshots by their timestamp.
     """
-    return sorted(screenshots, key=lambda x: x['timestamp'])
+    return sorted(screenshots, key=lambda x: x.get('timestamp', 0))
 
 def group_screenshots(screenshots):
     """
@@ -35,12 +35,12 @@ def group_screenshots(screenshots):
     """
     groups = {}
     for screenshot in screenshots:
-        group_id = screenshot['group_id']
+        group_id = screenshot.get('group_id', 0)
         if group_id not in groups:
             groups[group_id] = []
         groups[group_id].append(screenshot)
     # Sort groups by timestamp
-    sorted_groups = sorted(groups.values(), key=lambda group: group[0]['timestamp'])
+    sorted_groups = sorted(groups.values(), key=lambda group: group[0].get('timestamp', 0))
     return sorted_groups
 
 def generate_markdown(transcript, screenshot_groups, output_path):
@@ -55,21 +55,23 @@ def generate_markdown(transcript, screenshot_groups, output_path):
     current_paragraph = []
     
     for entry in transcript:
+        entry_start = entry.get('start', 0)
         # Insert all screenshot groups that should appear before this transcript entry
         while (screenshot_index < total_groups and
-               screenshot_groups[screenshot_index][0]['timestamp'] - 1.0 <= entry['start']):
+               screenshot_groups[screenshot_index][0].get('timestamp', 0) - 1.0 <= entry_start):
             group = screenshot_groups[screenshot_index]
             for screenshot in group:
                 # If there's an ongoing paragraph, flush it before inserting the screenshot
                 if current_paragraph:
                     if current_speaker:
-                        md_lines.append(f"**{current_speaker} [{format_time(current_paragraph[0]['start'])}]:**")
-                    paragraph_text = ' '.join([e['text'] for e in current_paragraph])
+                        md_lines.append(f"**{current_speaker} [{format_time(current_paragraph[0].get('start', 0))}]:**")
+                    paragraph_text = ' '.join([e.get('text', '') for e in current_paragraph])
                     md_lines.append(f"{paragraph_text}\n")
                     current_paragraph = []
                 # Insert the screenshot
-                image_path = screenshot['image_path']
-                md_lines.append(f"![Screenshot]({image_path})\n")
+                image_path = screenshot.get('image_path', '')
+                if image_path:
+                    md_lines.append(f"![Screenshot]({image_path})\n")
             screenshot_index += 1
         
         # Check if the speaker has changed
@@ -81,8 +83,8 @@ def generate_markdown(transcript, screenshot_groups, output_path):
             # Flush the current paragraph if exists
             if current_paragraph:
                 if current_speaker:
-                    md_lines.append(f"**{current_speaker} [{format_time(current_paragraph[0]['start'])}]:**")
-                paragraph_text = ' '.join([e['text'] for e in current_paragraph])
+                    md_lines.append(f"**{current_speaker} [{format_time(current_paragraph[0].get('start', 0))}]:**")
+                paragraph_text = ' '.join([e.get('text', '') for e in current_paragraph])
                 md_lines.append(f"{paragraph_text}\n")
                 current_paragraph = []
             # Update the current speaker
@@ -94,16 +96,17 @@ def generate_markdown(transcript, screenshot_groups, output_path):
     # After processing all entries, flush any remaining paragraph
     if current_paragraph:
         if current_speaker:
-            md_lines.append(f"**{current_speaker} [{format_time(current_paragraph[0]['start'])}]:**")
-        paragraph_text = ' '.join([e['text'] for e in current_paragraph])
+            md_lines.append(f"**{current_speaker} [{format_time(current_paragraph[0].get('start', 0))}]:**")
+        paragraph_text = ' '.join([e.get('text', '') for e in current_paragraph])
         md_lines.append(f"{paragraph_text}\n")
-    
+
     # Insert any remaining screenshots after the last transcript entry
     while screenshot_index < total_groups:
         group = screenshot_groups[screenshot_index]
         for screenshot in group:
-            image_path = screenshot['image_path']
-            md_lines.append(f"![Screenshot]({image_path})\n")
+            image_path = screenshot.get('image_path', '')
+            if image_path:
+                md_lines.append(f"![Screenshot]({image_path})\n")
         screenshot_index += 1
 
     # Write to Markdown file

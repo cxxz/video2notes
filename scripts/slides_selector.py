@@ -9,7 +9,7 @@ import shutil
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils import initialize_client, get_llm_response
+from app.utils.llm_utils import initialize_client, get_llm_response
 from flask import Flask, render_template_string, request, send_from_directory, url_for
 from dotenv import load_dotenv
 load_dotenv()
@@ -332,8 +332,10 @@ def run_slide_selector(folder_path):
     def shutdown():
         def shutdown_server():
             import time
+            import sys
             time.sleep(0.5)
-            os._exit(0)
+            # Use sys.exit instead of os._exit to allow proper cleanup
+            sys.exit(0)
         threading.Thread(target=shutdown_server, daemon=True).start()
         return "<h1>Server shutting down...</h1>"
     

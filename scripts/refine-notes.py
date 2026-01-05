@@ -7,7 +7,7 @@ import logging
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils import initialize_client, get_llm_response
+from app.utils.llm_utils import initialize_client, get_llm_response
 
 # Set up logging
 logging.basicConfig(
@@ -148,6 +148,9 @@ Here's a summary of the transcript in two to three paragraphs:
     # Call LLM to get a summary of the transcript
     logging.info(f"Getting a summary of the transcript using {args.model}...")
     lec_summary = get_llm_response(client, args.model, user_prompt)
+    if lec_summary is None:
+        logging.error("Failed to get summary from LLM. Exiting.")
+        sys.exit(1)
     logging.info(f"Summary of the transcript:\n{lec_summary}\n=============\nNow working on refining the transcript...\n")
     input_file_name = os.path.basename(args.input)
     output_file_name = f"refined_{input_file_name}" if not args.output else f"{args.output}/refined_{input_file_name}"

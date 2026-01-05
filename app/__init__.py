@@ -37,9 +37,9 @@ def create_app(config_name: Optional[str] = None) -> Flask:
     register_blueprints(app)
     
     # Log startup information
-    app.logger.info("🚀 Video2Notes Web Application Starting")
-    app.logger.info(f"📝 Configuration: {config_name}")
-    app.logger.info(f"🔧 Upload folder: {app.config['UPLOAD_FOLDER']}")
+    app.logger.info("Video2Notes Web Application Starting")
+    app.logger.info(f"Configuration: {config_name}")
+    app.logger.info(f"Upload folder: {app.config['UPLOAD_FOLDER']}")
     
     return app
 
@@ -68,4 +68,4 @@ def register_blueprints(app: Flask) -> None:
         def index():
             return "Video2Notes - Refactoring in progress..."
         
-        app.logger.info("⚠️ Using temporary routes - blueprints not yet created")
+        app.logger.warning("Using temporary routes - blueprints not yet created")

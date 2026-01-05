@@ -1,6 +1,7 @@
 """
 Speaker labeler state management.
 """
+import os
 import threading
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
@@ -56,6 +57,7 @@ class SpeakerLabelerState:
         self._current_index = 0
         self._output_transcript_path = ""
         self._active = False
+        self._temp_files: List[str] = []  # Track temp audio files for cleanup
         self._lock = threading.Lock()
     
     @property
@@ -94,7 +96,10 @@ class SpeakerLabelerState:
     
     @property
     def utterances(self) -> List[Utterance]:
-        """Get utterances list."""
+        """Get utterances list.
+
+        Returns a copy for thread safety. Cache the result if accessing multiple times.
+        """
         with self._lock:
             return self._utterances.copy()
     
@@ -106,7 +111,10 @@ class SpeakerLabelerState:
     
     @property
     def speaker_occurrences(self) -> Dict[str, List[Utterance]]:
-        """Get speaker occurrences."""
+        """Get speaker occurrences.
+
+        Returns a deep copy for thread safety. Cache the result if accessing multiple times.
+        """
         with self._lock:
             return {k: v.copy() for k, v in self._speaker_occurrences.items()}
     
@@ -118,7 +126,10 @@ class SpeakerLabelerState:
     
     @property
     def speaker_segments(self) -> Dict[str, List[Utterance]]:
-        """Get speaker segments."""
+        """Get speaker segments.
+
+        Returns a deep copy for thread safety. Cache the result if accessing multiple times.
+        """
         with self._lock:
             return {k: v.copy() for k, v in self._speaker_segments.items()}
     
@@ -130,7 +141,10 @@ class SpeakerLabelerState:
     
     @property
     def speaker_ids(self) -> List[str]:
-        """Get speaker IDs list."""
+        """Get speaker IDs list.
+
+        Returns a copy for thread safety. Cache the result if accessing multiple times.
+        """
         with self._lock:
             return self._speaker_ids.copy()
     
@@ -142,7 +156,10 @@ class SpeakerLabelerState:
     
     @property
     def speaker_mapping(self) -> Dict[str, str]:
-        """Get speaker mapping."""
+        """Get speaker mapping.
+
+        Returns a copy for thread safety. Cache the result if accessing multiple times.
+        """
         with self._lock:
             return self._speaker_mapping.copy()
     
@@ -216,10 +233,28 @@ class SpeakerLabelerState:
         """Get segments for a specific speaker."""
         with self._lock:
             return self._speaker_segments.get(speaker_id, []).copy()
-    
-    def reset(self) -> None:
-        """Reset state to initial values."""
+
+    def add_temp_file(self, path: str) -> None:
+        """Track a temporary file for cleanup."""
         with self._lock:
+            self._temp_files.append(path)
+
+    def _cleanup_temp_files(self) -> None:
+        """Remove all tracked temporary files."""
+        for path in self._temp_files:
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except OSError:
+                pass  # Best effort cleanup
+        self._temp_files.clear()
+
+    def reset(self) -> None:
+        """Reset state to initial values and cleanup temp files."""
+        with self._lock:
+            # Cleanup temp files first
+            self._cleanup_temp_files()
+
             self._audio_file = None
             self._audio_duration_ms = 0
             self._transcript_content = ""

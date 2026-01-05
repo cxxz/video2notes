@@ -2,6 +2,7 @@
 Workflow management routes for Video2Notes application.
 """
 import os
+from typing import Optional
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, Response
 from flask import current_app
 import json
@@ -202,7 +203,7 @@ def debug_form():
     })
 
 
-def _parse_float(value: str) -> float:
+def _parse_float(value: str) -> Optional[float]:
     """Parse float value from string, return None if invalid."""
     if not value:
         return None

@@ -4,13 +4,24 @@ import io
 import argparse
 import webbrowser
 import threading
+import logging
 from flask import Flask, request, render_template_string, redirect, url_for, send_file, abort
 from pydub import AudioSegment
 from dotenv import load_dotenv
 load_dotenv()
 
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
 SPEAKER_LABELER_PORT = os.getenv('SPEAKER_LABELER_PORT', 5006)
 LOCAL_SERVER = os.getenv('LOCAL_SERVER', 'false')
+
+# Pre-compiled regex patterns for speaker headers
+SPEAKER_HEADER_PATTERN = re.compile(r'\*\*(SPEAKER_\d{2}) \[([0-9:.]+)\]:\*\*')
+SPEAKER_REPLACE_PATTERN = re.compile(r'\*\*(SPEAKER_\d{2})( \[[0-9:.]+\]:)\*\*')
 
 app = Flask(__name__)
 
@@ -58,19 +69,18 @@ def load_transcript(transcript_path):
         with open(transcript_path, 'r', encoding='utf-8') as f:
             transcript_content = f.read()
     except Exception as e:
-        print("Error reading transcript file:", e)
+        logging.error(f"Error reading transcript file: {e}")
         exit(1)
-    
-    # Regex to match utterance headers like: **SPEAKER_09 [00:02.692]:**
-    pattern = re.compile(r'\*\*(SPEAKER_\d{2}) \[([0-9:.]+)\]:\*\*')
+
+    # Use pre-compiled pattern for utterance headers like: **SPEAKER_09 [00:02.692]:**
     utterances = []
-    for match in pattern.finditer(transcript_content):
+    for match in SPEAKER_HEADER_PATTERN.finditer(transcript_content):
         speaker = match.group(1)
         timestamp_str = match.group(2)
         try:
             start_ms = parse_timestamp(timestamp_str)
         except ValueError as e:
-            print("Error parsing timestamp:", e)
+            logging.error(f"Error parsing timestamp: {e}")
             continue
         utterances.append({
             "speaker": speaker,
@@ -82,7 +92,7 @@ def load_transcript(transcript_path):
         })
     
     if not utterances:
-        print("No utterances found in transcript.")
+        logging.error("No utterances found in transcript.")
         exit(1)
     
     # Ensure utterances are in the order they appear in the transcript
@@ -128,8 +138,7 @@ def update_transcript():
     """
     global transcript_content, speaker_mapping
     updated_content = transcript_content
-    # Pattern to match the header portion (speaker ID and timestamp)
-    pattern = re.compile(r'\*\*(SPEAKER_\d{2})( \[[0-9:.]+\]:)\*\*')
+    # Use pre-compiled pattern to match the header portion (speaker ID and timestamp)
     def replace_func(match):
         spk = match.group(1)
         rest = match.group(2)
@@ -141,9 +150,9 @@ def update_transcript():
         else:
             # Keep original format if no custom name was provided
             formatted_label = label
-            
+
         return f'**{formatted_label}{rest}**'
-    updated_content = pattern.sub(replace_func, updated_content)
+    updated_content = SPEAKER_REPLACE_PATTERN.sub(replace_func, updated_content)
     return updated_content
 
 # Flask Routes
@@ -328,16 +337,16 @@ def initialize(audio_path, transcript_path):
     """
     global audio_file, audio_duration_ms, output_transcript_path
     if not os.path.exists(audio_path):
-        print("Audio file not found:", audio_path)
+        logging.error(f"Audio file not found: {audio_path}")
         exit(1)
     if not os.path.exists(transcript_path):
-        print("Transcript file not found:", transcript_path)
+        logging.error(f"Transcript file not found: {transcript_path}")
         exit(1)
     try:
         audio_file = AudioSegment.from_file(audio_path)
         audio_duration_ms = len(audio_file)
     except Exception as e:
-        print("Error loading audio file:", e)
+        logging.error(f"Error loading audio file: {e}")
         exit(1)
     load_transcript(transcript_path)
     
@@ -365,7 +374,7 @@ if __name__ == '__main__':
     #     browser_thread.daemon = True
     #     browser_thread.start()
     
-    print("Speaker labeling web interface starting...")
-    
+    logging.info("Speaker labeling web interface starting...")
+
     # Start the Flask app. In production, consider using a production server.
     app.run(host='0.0.0.0', port=SPEAKER_LABELER_PORT, debug=False)

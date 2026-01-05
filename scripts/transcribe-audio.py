@@ -206,9 +206,9 @@ def main():
     slides_dir = args.slides_dir
     vocab = None
     if slides_dir is not None:
-        vacab_path = os.path.join(slides_dir, "vocabulary.txt")
-        if os.path.exists(vacab_path):
-            with open(vacab_path, "r") as f:
+        vocab_path = os.path.join(slides_dir, "vocabulary.txt")
+        if os.path.exists(vocab_path):
+            with open(vocab_path, "r") as f:
                 vocab = f.read()
                 
     # args.whisper_model = "/local/Systran/faster-whisper-large-v3"

@@ -3,6 +3,8 @@ Speaker service for handling speaker labeling functionality.
 """
 import os
 import re
+import shutil
+import tempfile
 from typing import List, Dict, Any, Optional, Tuple
 from flask import current_app
 from pydub import AudioSegment
@@ -125,11 +127,18 @@ class SpeakerService:
             end_ms = min(len(audio), segment.end_ms + 500)  # 0.5s after
             
             audio_segment = audio[start_ms:end_ms]
-            
-            # Export to temporary file
-            temp_path = f"/tmp/speaker_{speaker_id}_segment_{segment_index}.mp3"
+
+            # Export to temporary file using proper temp file handling
+            fd, temp_path = tempfile.mkstemp(
+                suffix='.mp3',
+                prefix=f'speaker_{speaker_id}_seg{segment_index}_'
+            )
+            os.close(fd)  # Close the file descriptor
             audio_segment.export(temp_path, format="mp3")
-            
+
+            # Track temp file for cleanup when speaker labeling ends
+            self.state.add_temp_file(temp_path)
+
             return temp_path
             
         except Exception as e:
@@ -297,7 +306,6 @@ class SpeakerService:
             if not speaker_mapping:
                 # No mapping to apply, just copy the file
                 workflow_state.add_log("No speaker mapping available, copying file unchanged")
-                import shutil
                 shutil.copy2(input_path, output_path)
                 return True
 

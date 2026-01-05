@@ -286,7 +286,25 @@ class WorkflowState:
             self._refined_notes_path = value
 
     def reset(self) -> None:
-        """Reset workflow state to initial values."""
+        """Reset workflow state to initial values.
+
+        Properly joins any running threads before clearing references to prevent
+        orphaned threads and resource leaks.
+        """
+        # Join threads outside the lock to avoid deadlock
+        refinement_thread = None
+        workflow_thread = None
+        with self._lock:
+            refinement_thread = self._refinement_thread
+            workflow_thread = self._workflow_thread
+
+        # Join running threads with timeout
+        if refinement_thread is not None and refinement_thread.is_alive():
+            refinement_thread.join(timeout=5.0)
+        if workflow_thread is not None and workflow_thread.is_alive():
+            workflow_thread.join(timeout=5.0)
+
+        # Now reset state with lock
         with self._lock:
             self._status = WorkflowStatus.IDLE
             self._current_step = ''
@@ -295,6 +313,7 @@ class WorkflowState:
             self._interactive_stage = None
             self._interactive_ready = False
             self._debug_logged = False
+            self._workflow_thread = None
             self._refinement_thread = None
             self._refinement_complete = False
             self._refined_notes_path = None

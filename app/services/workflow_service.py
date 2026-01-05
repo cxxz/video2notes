@@ -159,11 +159,14 @@ class WorkflowService:
                             self._log_message(
                                 f"⚠️ AI enhancement timed out after {refinement_timeout}s - continuing without it"
                             )
+                            # Thread still running - clear path to prevent using incomplete results
+                            self.workflow_state.refined_notes_path = None
                             self.workflow_state.refinement_complete = True
 
-                    # Verify refinement completed successfully
+                    # Verify refinement completed successfully (thread exited without setting complete flag)
                     if not self.workflow_state.refinement_complete:
                         self._log_message("⚠️ AI enhancement did not complete properly")
+                        self.workflow_state.refined_notes_path = None
 
                     # Apply speaker labels to the refined transcript
                     refined_path = self.workflow_state.refined_notes_path
@@ -258,6 +261,9 @@ class WorkflowService:
             slides_json = os.path.join(slides_dir, "slides.json")
             original_slides_json = os.path.join(slides_dir, "slides_original.json")
             if os.path.exists(slides_json):
+                # Remove existing backup if it exists (allows re-running workflow)
+                if os.path.exists(original_slides_json):
+                    os.remove(original_slides_json)
                 os.rename(slides_json, original_slides_json)
                 self._log_message("Renamed original slides.json to slides_original.json")
         

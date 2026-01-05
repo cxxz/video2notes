@@ -50,8 +50,11 @@ def play_speaker_audio(speaker_id):
     
     if not speaker_labeler_state.active:
         return jsonify({'error': 'Speaker labeler not active'}), 400
-    
-    segment_index = int(request.args.get('segment', 0))
+
+    try:
+        segment_index = int(request.args.get('segment', 0))
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid segment index'}), 400
     
     audio_path = speaker_service.get_speaker_audio_segment(speaker_id, segment_index)
     if not audio_path:

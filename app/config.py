@@ -2,6 +2,7 @@
 Configuration management for Video2Notes application.
 """
 import os
+import secrets
 from typing import List, Set
 
 
@@ -25,7 +26,8 @@ class Config:
     """Base configuration class."""
     
     # Flask configuration
-    SECRET_KEY = os.getenv('FLASK_SECRET_KEY', 'your-secret-key-here')
+    # Generate cryptographically secure secret key if not provided
+    SECRET_KEY = os.getenv('FLASK_SECRET_KEY') or secrets.token_hex(32)
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', '/tmp/video2notes_uploads')
     MAX_CONTENT_LENGTH = int(os.getenv('MAX_UPLOAD_SIZE', 2 * 1024 * 1024 * 1024))  # 2GB default
     
@@ -48,12 +50,19 @@ class Config:
     # AI/ML Model configuration
     LOCAL_WHISPER_MODEL = os.getenv('LOCAL_WHISPER_MODEL')
     LOCAL_DIARIZE_MODEL = os.getenv('LOCAL_DIARIZE_MODEL')
-    REFINE_NOTES_LLM = os.getenv('REFINE_NOTES_LLM', 'openai/gpt-oss-120b')
-    
+    REFINE_NOTES_LLM = os.getenv('REFINE_NOTES_LLM', 'openai/gpt-4o')
+    VOCABULARY_LLM = os.getenv('VOCABULARY_LLM', 'bedrock/claude-4-sonnet')
+
     # Allowed LLM models for note refinement
+    # Supports: openai/<model>, azure/<deployment>, bedrock/<model>
     ALLOWED_LLM_MODELS: List[str] = [
-        'openai/gpt-oss-120b',
-        'azure/gpt-5.1',
+        'openai/gpt-4o',
+        'openai/gpt-4-turbo',
+        'openai/gpt-4o-mini',
+        'azure/gpt-4o',
+        'azure/gpt-4',
+        'bedrock/claude-4-sonnet',
+        'bedrock/claude-3-7-sonnet',
     ]
     
     # File cleanup configuration

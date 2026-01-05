@@ -194,9 +194,9 @@ def execute_command_with_output(command: List[str], description: str = None,
 
         if description:
             if success:
-                current_app.logger.info(f"✅ {description} completed successfully")
+                current_app.logger.info(f"{description} completed successfully")
             else:
-                current_app.logger.error(f"❌ {description} failed with return code {result.returncode}")
+                current_app.logger.error(f"{description} failed with return code {result.returncode}")
                 current_app.logger.error(f"Output: {output}")
 
         return success, output
@@ -204,13 +204,13 @@ def execute_command_with_output(command: List[str], description: str = None,
     except subprocess.TimeoutExpired as e:
         error_msg = f"Timeout ({timeout}s) exceeded"
         if description:
-            current_app.logger.error(f"⏰ {description} timed out: {error_msg}")
+            current_app.logger.error(f"{description} timed out: {error_msg}")
         return False, error_msg
 
     except Exception as e:
         error_msg = f"Error executing command: {str(e)}"
         if description:
-            current_app.logger.error(f"❌ {description} failed: {error_msg}")
+            current_app.logger.error(f"{description} failed: {error_msg}")
         return False, error_msg
 
 

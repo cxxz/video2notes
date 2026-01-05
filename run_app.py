@@ -26,9 +26,9 @@ def main():
         )
     
     # Log startup information
-    app.logger.info("🚀 Starting Video2Notes Web Application")
-    app.logger.info(f"📝 Access the application at: http://0.0.0.0:{port}")
-    app.logger.info("🔧 Using modular Flask blueprints architecture")
+    app.logger.info("Starting Video2Notes Web Application")
+    app.logger.info(f"Access the application at: http://0.0.0.0:{port}")
+    app.logger.info("Using modular Flask blueprints architecture")
     
     # Create static directory if it doesn't exist
     os.makedirs('app/static/css', exist_ok=True)
