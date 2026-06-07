@@ -1,0 +1,42 @@
+[project]
+name = "video2notes"
+version = "0.1.0"
+description = "Flask application for turning presentation videos into structured notes."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "anthropic[bedrock]>=0.18.0,<1.0.0",
+    "flask>=2.3.3,<3.0.0",
+    "imagehash>=4.3.0,<5.0.0",
+    "moviepy>=2.0.0,<3.0.0",
+    "numpy>=1.26,<3.0",
+    "openai>=1.0.0,<2.0.0",
+    "opencv-python>=4.8.0,<5.0.0",
+    "pillow>=10.0.0,<11.0.0",
+    "playwright>=1.40.0,<2.0.0",
+    "psutil",
+    "pydub>=0.25.0,<0.26.0",
+    "pyannote-audio>=4.0.4,<5.0.0",
+    "pytesseract",
+    "python-dotenv>=1.0.0,<2.0.0",
+    "scrubadub>=2.0.0,<3.0.0",
+    "scrubadub-spacy>=2.0.0,<3.0.0",
+    "torch==2.8.0",
+    "torchaudio==2.8.0",
+    "torchvision==0.23.0",
+    "werkzeug>=2.3.7,<3.0.0",
+    "whisperx>=3.8.6,<4.0.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+torchaudio = { index = "pytorch-cu126" }
+torchvision = { index = "pytorch-cu126" }
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true

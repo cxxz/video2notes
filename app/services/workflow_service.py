@@ -297,7 +297,7 @@ class WorkflowService:
         # NON-CRITICAL: Extract vocabulary using LLM (workflow can continue without it)
         try:
             self._log_message("🤖 Extracting vocabulary using AI...")
-            model_id = current_app.config.get('VOCABULARY_LLM', 'azure/gpt-5.1')
+            model_id = current_app.config.get('VOCABULARY_LLM', 'azure/gpt-5.4')
             result = self.slide_service.extract_vocabulary(model_id)
 
             if result['success']:

@@ -143,10 +143,10 @@ def perform_alignment_and_diarization(result, audio, lang, device, diarize_model
 
     logging.info("Start diarization...")
     if diarize_model is None:
-         diarize_model = whisperx.diarize.DiarizationPipeline(use_auth_token=HF_TOKEN, device=device)
+         diarize_model = whisperx.diarize.DiarizationPipeline(token=HF_TOKEN, device=device)
     else:
         model_config = f"{diarize_model}/config.yaml"
-        diarize_model = whisperx.diarize.DiarizationPipeline(model_config, use_auth_token=HF_TOKEN, device=device)
+        diarize_model = whisperx.diarize.DiarizationPipeline(model_config, token=HF_TOKEN, device=device)
     diarize_segments = diarize_model(audio)
     logging.info("Diarization done.")
 

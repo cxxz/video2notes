@@ -56,9 +56,11 @@ class Config:
     # Allowed LLM models for note refinement
     # Supports: openai/<model>, azure/<deployment>, bedrock/<model>
     ALLOWED_LLM_MODELS: List[str] = [
+        'openai/gpt-oss-120b',
         'openai/gpt-4o',
         'openai/gpt-4-turbo',
         'openai/gpt-4o-mini',
+        'azure/gpt-5.4',
         'azure/gpt-4o',
         'azure/gpt-4',
         'bedrock/claude-4-sonnet',
